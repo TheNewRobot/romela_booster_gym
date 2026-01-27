@@ -53,9 +53,21 @@ class Runner:
         parser.add_argument("--max_iterations", type=int, help="Maximum number of training iterations. Overrides config file if provided.")
         self.args = parser.parse_args()
 
+    def _find_config(self, task_name):
+        matches = []
+        for root, dirs, files in os.walk("envs"):
+            for file in files:
+                if file == f"{task_name}.yaml":
+                    matches.append(os.path.join(root, file))
+        if len(matches) == 0:
+            raise FileNotFoundError(f"Config file '{task_name}.yaml' not found in envs/")
+        if len(matches) > 1:
+            print(f"Warning: Multiple configs found for '{task_name}': {matches}. Using {matches[0]}")
+        return matches[0]
+
     # Override config file with args if needed
     def _update_cfg_from_args(self):
-        cfg_file = os.path.join("envs", "locomotion", "{}.yaml".format(self.args.task))
+        cfg_file = self._find_config(self.args.task)
         with open(cfg_file, "r", encoding="utf-8") as f:
             self.cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
         for arg in vars(self.args):
@@ -96,12 +108,20 @@ class Runner:
         except Exception as e:
             print(f"Failed to load optimizer: {e}")
 
+    def _format_time(self, seconds):
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
     def train(self):
         self.recorder = Recorder(self.cfg, self.args.task)
+        total_start_time = time.time()
         obs, infos = self.env.reset()
         obs = obs.to(self.device)
         privileged_obs = infos["privileged_obs"].to(self.device)
         for it in range(self.cfg["basic"]["max_iterations"]):
+            collection_start = time.time()
             # within horizon_length, env.step() is called with same act
             for n in range(self.cfg["runner"]["horizon_length"]):
                 self.buffer.update_data("obses", n, obs)
@@ -119,6 +139,9 @@ class Runner:
                 ep_info = {"reward": rew}
                 ep_info.update(infos["rew_terms"])
                 self.recorder.record_episode_statistics(done, ep_info, it, n == (self.cfg["runner"]["horizon_length"] - 1))
+
+            collection_time = time.time() - collection_start
+            learn_start = time.time()
 
             with torch.no_grad():
                 old_dist = self.model.act(self.buffer["obses"])
@@ -212,7 +235,37 @@ class Runner:
                     },
                     it + 1,
                 )
-            print("epoch: {}/{}".format(it + 1, self.cfg["basic"]["max_iterations"]))
+
+            learn_time = time.time() - learn_start
+            total_time = time.time() - total_start_time
+            iteration_time = collection_time + learn_time
+            total_timesteps = (it + 1) * self.cfg["runner"]["horizon_length"] * self.env.num_envs
+            fps = int(self.cfg["runner"]["horizon_length"] * self.env.num_envs / iteration_time)
+            max_iterations = self.cfg["basic"]["max_iterations"]
+            eta = total_time / (it + 1) * (max_iterations - it - 1)
+
+            mean_reward = self.recorder._mean(self.recorder.last_episode.get("reward", []))
+            mean_length = self.recorder._mean(self.recorder.last_episode.get("steps", []))
+
+            width = 80
+            pad = 35
+            print(f"{'#' * width}")
+            print(f" Learning iteration {it + 1}/{max_iterations} ".center(width))
+            print()
+            print(f"{'Computation:':<{pad}} {fps} steps/s (collection: {collection_time:.3f}s, learning: {learn_time:.3f}s)")
+            print(f"{'Value function loss:':<{pad}} {mean_value_loss:.4f}")
+            print(f"{'Actor loss:':<{pad}} {mean_actor_loss:.4f}")
+            print(f"{'Bound loss:':<{pad}} {mean_bound_loss:.4f}")
+            print(f"{'Entropy:':<{pad}} {mean_entropy:.4f}")
+            print(f"{'KL divergence:':<{pad}} {kl_mean:.4f}")
+            print(f"{'Learning rate:':<{pad}} {self.learning_rate:.2e}")
+            print(f"{'Mean episode reward:':<{pad}} {mean_reward:.2f}")
+            print(f"{'Mean episode length:':<{pad}} {mean_length:.2f}")
+            print(f"{'-' * width}")
+            print(f"{'Total timesteps:':<{pad}} {total_timesteps}")
+            print(f"{'Iteration time:':<{pad}} {self._format_time(iteration_time)}")
+            print(f"{'Total time:':<{pad}} {self._format_time(total_time)}")
+            print(f"{'ETA:':<{pad}} {self._format_time(eta)}")
 
     def play(self):
         obs, infos = self.env.reset()
