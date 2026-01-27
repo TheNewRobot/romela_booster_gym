@@ -97,7 +97,7 @@ class Runner:
             print(f"Failed to load optimizer: {e}")
 
     def train(self):
-        self.recorder = Recorder(self.cfg)
+        self.recorder = Recorder(self.cfg, self.args.task)
         obs, infos = self.env.reset()
         obs = obs.to(self.device)
         privileged_obs = infos["privileged_obs"].to(self.device)
@@ -218,7 +218,8 @@ class Runner:
         obs, infos = self.env.reset()
         obs = obs.to(self.device)
         if self.cfg["viewer"]["record_video"]:
-            os.makedirs("videos", exist_ok=True)
+            video_dir = os.path.join("videos", self.args.task)
+            os.makedirs(video_dir, exist_ok=True)
             name = time.strftime("%Y-%m-%d-%H-%M-%S.mp4", time.localtime())
             record_time = self.cfg["viewer"]["record_interval"]
         while True:
@@ -233,7 +234,7 @@ class Runner:
                     record_time += self.cfg["viewer"]["record_interval"]
                     self.interrupt = False
                     signal.signal(signal.SIGINT, self.interrupt_handler)
-                    with imageio.get_writer(os.path.join("videos", name), fps=int(1.0 / self.env.dt)) as self.writer:
+                    with imageio.get_writer(os.path.join(video_dir, name), fps=int(1.0 / self.env.dt)) as self.writer:
                         for frame in self.env.camera_frames:
                             self.writer.append_data(frame)
                     if self.interrupt:

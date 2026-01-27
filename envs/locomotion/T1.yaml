@@ -18,7 +18,7 @@ runner:
   horizon_length: 24
   mini_epochs: 20
   save_interval: 100
-  use_wandb: true
+  use_wandb: false
 
 viewer:
   pos: [3., -3., 2.]  # [m]

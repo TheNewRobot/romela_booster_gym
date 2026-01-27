@@ -8,10 +8,10 @@ import yaml
 
 class Recorder:
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, task_name):
         self.cfg = cfg
         name = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
-        self.dir = os.path.join("logs", name)
+        self.dir = os.path.join("logs", task_name, name)
         os.makedirs(self.dir)
         self.model_dir = os.path.join(self.dir, "nn")
         os.mkdir(self.model_dir)
