@@ -1,0 +1,7 @@
+
+# Misc folders
+/isaacgym
+/videos
+/logs
+
+*/__pycache__

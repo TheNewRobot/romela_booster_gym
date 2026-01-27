@@ -1,13 +1,17 @@
-# Booster Gym
+# RoMeLa Booster Gym
 
-** **News** **: We now provide a new RL pipeline supporting K1 robot!
-- [Booster Train](https://github.com/BoosterRobotics/booster_train) trains a set of reinforcement learning tasks for Booster robots using [Isaac Lab](https://isaac-sim.github.io/IsaacLab/main/index.html).
-- [Booster Deploy](https://github.com/BoosterRobotics/booster_deploy) provides an easy-to-use deployment framework that enables seamlessly running the same policy code in both simulation and on real robots.
-- [Booster Assets](https://github.com/BoosterRobotics/booster_assets) provides Booster robot descriptions and example motion data.
+A reinforcement learning framework for humanoid robot locomotion on the Booster T1 platform, developed by the [RoMeLa](https://www.romela.org/) team at UCLA for RoboCup 2026.
 
----
+This repository builds upon [Booster Gym](https://github.com/BoosterRobotics/booster_gym) and integrates with our RoboCup software stack. For details on our 2024 championship system, see:
 
-Booster Gym is a reinforcement learning (RL) framework designed for humanoid robot locomotion developed by [Booster Robotics](https://boosterobotics.com/).
+> **A Hierarchical, Model-Based System for High-Performance Humanoid Soccer**  
+> Wang Q.*, Zhu M.*, Hou R.*, Gillespie K., Zhu A., Wang S., Wang Y., Fernandez G.I., Liu Y., Togashi C., Nam H., Navghare A., Xu A., Zhu T., Ahn M.S., **Flores Alvarez A.**, Quan J., Hong E., Hong D.W.  
+> *RoboCup 2024 Adult-Sized Humanoid Soccer Champions*
+
+**Related Booster Robotics Resources:**
+- [Booster Train](https://github.com/BoosterRobotics/booster_train) - RL tasks using Isaac Lab
+- [Booster Deploy](https://github.com/BoosterRobotics/booster_deploy) - Sim-to-real deployment framework
+- [Booster Assets](https://github.com/BoosterRobotics/booster_assets) - Robot descriptions and motion data
 
 [![real_T1_deploy](https://obs-cdn.boosterobotics.com/rl_deploy_demo_video_v3.gif)](https://obs-cdn.boosterobotics.com/rl_deploy_demo_video.mp4)
 
@@ -41,50 +45,77 @@ The framework supports the following stages for reinforcement learning:
 
 Follow these steps to set up your environment:
 
-1. Create an environment with Python 3.8:
+### 1. Create Conda Environment
 
-    ```sh
-    $ conda create --name <env_name> python=3.8
-    $ conda activate <env_name>
-    ```
+```sh
+conda create --name romela_gym python=3.8
+conda activate romela_gym
+```
 
-2. Install PyTorch with CUDA support:
+### 2. Install PyTorch with CUDA Support
 
-    ```sh
-    $ conda install numpy=1.21.6 pytorch=2.0 pytorch-cuda=11.8 -c pytorch -c nvidia
-    ```
+**Option A: Conda (recommended if connection is stable)**
+```sh
+conda install numpy=1.21.6 pytorch=2.0.1 pytorch-cuda=11.8 -c pytorch -c nvidia
+```
 
-3. Install Isaac Gym
+**Option B: Wget + Pip (for unreliable connections)**
 
-    Download Isaac Gym from [NVIDIA’s website](https://developer.nvidia.com/isaac-gym/download).
+If conda downloads fail due to connection issues, use wget with resume capability:
+```sh
+# Download PyTorch wheel (supports resume with -c flag)
+wget -c https://download.pytorch.org/whl/cu118/torch-2.0.1%2Bcu118-cp38-cp38-linux_x86_64.whl
 
-    Extract and install:
+# Install from local file
+pip install torch-2.0.1+cu118-cp38-cp38-linux_x86_64.whl
+pip install torchvision==0.15.2+cu118 --index-url https://download.pytorch.org/whl/cu118
+pip install numpy==1.21.6
 
-    ```sh
-    $ tar -xzvf IsaacGym_Preview_4_Package.tar.gz
-    $ cd isaacgym/python
-    $ pip install -e .
-    ```
+# Clean up downloaded files
+rm torch-2.0.1+cu118-cp38-cp38-linux_x86_64.whl
+```
 
-    Configure the environment to handle shared libraries, otherwise cannot found shared library of `libpython3.8`:
+### 3. Install Isaac Gym
 
-    ```sh
-    $ cd $CONDA_PREFIX
-    $ mkdir -p ./etc/conda/activate.d
-    $ vim ./etc/conda/activate.d/env_vars.sh  # Add the following line
-    export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
-    $ mkdir -p ./etc/conda/deactivate.d
-    $ vim ./etc/conda/deactivate.d/env_vars.sh  # Add the following line
-    export LD_LIBRARY_PATH=${OLD_LD_LIBRARY_PATH}
-    unset OLD_LD_LIBRARY_PATH
-    ```
+Download Isaac Gym Preview 4 from [NVIDIA's website](https://developer.nvidia.com/isaac-gym/download).
 
- 4. Install Python dependencies:
+Extract and install:
+```sh
+tar -xzvf IsaacGym_Preview_4_Package.tar.gz
+cd isaacgym/python
+pip install -e . --no-deps  # --no-deps prevents overwriting PyTorch
+pip install imageio ninja   # Install missing dependencies
+cd ../..
+```
 
-    ```sh
-    $ pip install -r requirements.txt
-    ```
+Configure the environment to handle shared libraries (fixes `libpython3.8` not found):
+```sh
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+echo 'export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH}' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+echo 'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib' >> $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh
+
+mkdir -p $CONDA_PREFIX/etc/conda/deactivate.d
+echo 'export LD_LIBRARY_PATH=${OLD_LD_LIBRARY_PATH}' >> $CONDA_PREFIX/etc/conda/deactivate.d/env_vars.sh
+echo 'unset OLD_LD_LIBRARY_PATH' >> $CONDA_PREFIX/etc/conda/deactivate.d/env_vars.sh
+
+# Reactivate to apply changes
+conda deactivate && conda activate romela_gym
+```
+
+Alternatively, edit the files manually with `nano $CONDA_PREFIX/etc/conda/activate.d/env_vars.sh`.
+
+### 4. Install Python Dependencies
+
+```sh
+pip install -r requirements.txt
+```
+
+### 5. Verify Installation
+
+```sh
+python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA available: {torch.cuda.is_available()}')"
+python -c "from isaacgym import gymapi; print('Isaac Gym OK')"
+```
 
 ## Usage
 
@@ -134,20 +165,22 @@ You can disable W&B tracking by setting `use_wandb` to `false` in the config fil
 
 #### In-Simulation Testing
 
-To test the trained policy in Isaac Gym, run:
+To test the trained policy in Isaac Gym with a single robot (recommended for visualization):
 
 ```sh
-$ python play.py --task=T1 --checkpoint=-1
+python play.py --task=T1 --checkpoint=-1 --num_envs=1
 ```
+
+> **Note:** The default `num_envs=4096` is optimized for training parallelization. Use `--num_envs=1` when visualizing or debugging a single robot.
 
 Videos of the evaluation are automatically saved in `videos/<date-time>.mp4`. You can disable video recording by setting `record_video` to `false` in the config file.
 
 #### Cross-Simulation Testing
 
-To test the policy in MuJoCo, run:
+To test the policy in MuJoCo (sim-to-sim transfer validation):
 
 ```sh
-$ python play_mujoco.py --task=T1 --checkpoint=-1
+python play_mujoco.py --task=T1 --checkpoint=-1
 ```
 
 ---
@@ -161,3 +194,58 @@ $ python export_model.py --task=T1 --checkpoint=-1
 ```
 
 After exporting the model, follow the steps in [Deploy on Booster Robot](deploy/README.md) to complete the deployment process.
+
+---
+
+## RoboCup 2025 Roadmap
+
+This repository is being extended to support multiple RL policies for RoboCup 2025 humanoid soccer. The goal is to replace the current model-based locomotion with learned policies while integrating with the existing behavior tree stack.
+
+### Planned Policies
+
+| Policy | Description | Status |
+|--------|-------------|--------|
+| **Locomotion (LP)** | Velocity-command walking/running | In Progress |
+| **Dribbling (DP)** | Ball control while moving toward goal | Planned |
+| **Kicking (KP)** | Powerful kicks from various positions | Planned |
+| **Goalkeeper (GP)** | Defensive positioning and saves | Planned |
+
+### Integration Architecture
+
+```
+Behavior Tree (existing)
+    │
+    ├── Ball Memory Manager
+    ├── Role Assignment  
+    ├── Kick Target Selection
+    │
+    ▼
+RL Policy Interface (velocity commands: vx, vy, vyaw)
+    │
+    ├── Locomotion Policy (LP)
+    ├── Dribbling Policy (DP)  
+    ├── Kicking Policy (KP)
+    └── Goalkeeper Policy (GP)
+    │
+    ▼
+Low-Level Control → Booster T1 Hardware
+```
+
+### Development Priorities
+
+1. **Sim2Sim Validation** - Transfer policies from Isaac Gym to MuJoCo for testing
+2. **Policy Interface Definition** - Standardize observation/action spaces for BT integration
+3. **Benchmark Suite** - Create test scenarios to measure policy improvements
+4. **Deploy/Fine-tune** - Real robot deployment and domain adaptation
+
+### Repository Structure (Planned)
+
+```
+romela_booster_gym/
+├── configs/          # All YAML configurations
+├── envs/             # Environment definitions (LP, DP, KP, GP)
+├── policies/         # Neural network architectures
+├── runners/          # Training and evaluation scripts
+├── deploy/           # Real robot deployment
+├── tests/            # Unit, integration, sim2sim tests
+└── external/         # Imported code (dribblebot, goalkeeper, etc.)
