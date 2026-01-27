@@ -110,7 +110,14 @@ Alternatively, edit the files manually with `nano $CONDA_PREFIX/etc/conda/activa
 pip install -r requirements.txt
 ```
 
-### 5. Verify Installation
+### 5. Install Package (Editable Mode)
+```sh
+pip install -e .
+```
+
+This adds the project root to Python's path permanently.
+
+### 6. Verify Installation
 
 ```sh
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA available: {torch.cuda.is_available()}')"
@@ -124,7 +131,7 @@ python -c "from isaacgym import gymapi; print('Isaac Gym OK')"
 To start training a policy, run the following command:
 
 ```sh
-$ python train.py --task=T1
+$ python scripts/train.py --task=T1 --headless=True
 ```
 
 Training logs and saved models will be stored in `logs/<date-time>/`.
@@ -168,7 +175,7 @@ You can disable W&B tracking by setting `use_wandb` to `false` in the config fil
 To test the trained policy in Isaac Gym with a single robot (recommended for visualization):
 
 ```sh
-python play.py --task=T1 --checkpoint=-1 --num_envs=1
+python scripts/play.py --task=T1 --checkpoint=-1 --num_envs=1
 ```
 
 > **Note:** The default `num_envs=4096` is optimized for training parallelization. Use `--num_envs=1` when visualizing or debugging a single robot.
@@ -180,7 +187,7 @@ Videos of the evaluation are automatically saved in `videos/<date-time>.mp4`. Yo
 To test the policy in MuJoCo (sim-to-sim transfer validation):
 
 ```sh
-python play_mujoco.py --task=T1 --checkpoint=-1
+python scripts/play_mujoco.py --task=T1 --checkpoint=-1
 ```
 
 ---
@@ -190,7 +197,7 @@ python play_mujoco.py --task=T1 --checkpoint=-1
 To deploy a trained policy through the Booster Robotics SDK in simulation or in the real world, export the model using:
 
 ```sh
-$ python export_model.py --task=T1 --checkpoint=-1
+$ python scripts/export_model.py --task=T1 --checkpoint=-1
 ```
 
 After exporting the model, follow the steps in [Deploy on Booster Robot](deploy/README.md) to complete the deployment process.
