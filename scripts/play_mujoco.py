@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("--task", required=True, type=str, help="Name of the task to run.")
     parser.add_argument("--checkpoint", type=str, help="Path of model checkpoint to load. Overrides config file if provided.")
     args = parser.parse_args()
-    cfg_file = os.path.join("configs", "envs", "{}.yaml".format(args.task))
+    cfg_file = os.path.join("envs", "locomotion", "{}.yaml".format(args.task))
     with open(cfg_file, "r", encoding="utf-8") as f:
         cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
     if args.checkpoint is not None:

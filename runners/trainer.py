@@ -55,7 +55,7 @@ class Runner:
 
     # Override config file with args if needed
     def _update_cfg_from_args(self):
-        cfg_file = os.path.join("configs", "envs", "{}.yaml".format(self.args.task))
+        cfg_file = os.path.join("envs", "locomotion", "{}.yaml".format(self.args.task))
         with open(cfg_file, "r", encoding="utf-8") as f:
             self.cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
         for arg in vars(self.args):
