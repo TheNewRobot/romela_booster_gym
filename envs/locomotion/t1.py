@@ -16,9 +16,9 @@ assert gymtorch
 import torch
 
 import numpy as np
-from .base_task import BaseTask
+from envs.base_task import BaseTask
 
-from utils.utils import apply_randomization
+from utils.helpers import apply_randomization
 
 
 class T1(BaseTask):
