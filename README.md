@@ -195,12 +195,11 @@ You can disable W&B tracking by setting `use_wandb` to `false` in the config fil
 #### In-Simulation Testing
 
 To test the trained policy in Isaac Gym with a single robot (recommended for visualization):
-
 ```sh
-python scripts/play.py --task=T1 --checkpoint=-1 --num_envs=1
+python scripts/play.py --task=T1 --checkpoint=-1 --num_envs=1 --terrain=plane
 ```
 
-> **Note:** The default `num_envs=4096` is optimized for training parallelization. Use `--num_envs=1` when visualizing or debugging a single robot.
+> **Note:** Use `--num_envs=1` when visualizing. Use `--terrain=plane` for flat ground (default is `trimesh` from config).
 
 Videos of the evaluation are automatically saved in `videos/<date-time>.mp4`. You can disable video recording by setting `record_video` to `false` in the config file.
 
@@ -271,7 +270,7 @@ Low-Level Control → Booster T1 Hardware
 
 ```
 romela_booster_gym/
-├── configs/          # All YAML configurations
+├── resources/        # CAD Files, expert data
 ├── envs/             # Environment definitions (LP, DP, KP, GP)
 ├── policies/         # Neural network architectures
 ├── runners/          # Training and evaluation scripts

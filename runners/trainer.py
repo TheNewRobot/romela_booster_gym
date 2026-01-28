@@ -52,6 +52,7 @@ class Runner:
         parser.add_argument("--seed", type=int, help="Random seed. Overrides config file if provided.")
         parser.add_argument("--max_iterations", type=int, help="Maximum number of training iterations. Overrides config file if provided.")
         parser.add_argument("--name", type=str, help="Experiment name suffix for log folder. Overrides config file if provided.")
+        parser.add_argument("--terrain", type=str, help="Terrain type: 'plane' or 'trimesh'. Overrides config file if provided.")
         self.args = parser.parse_args()
 
     def _find_config(self, task_name):
@@ -75,6 +76,8 @@ class Runner:
             if getattr(self.args, arg) is not None:
                 if arg == "num_envs":
                     self.cfg["env"][arg] = getattr(self.args, arg)
+                elif arg == "terrain":
+                    self.cfg["terrain"]["type"] = getattr(self.args, arg)
                 else:
                     self.cfg["basic"][arg] = getattr(self.args, arg)
         if not self.test:
