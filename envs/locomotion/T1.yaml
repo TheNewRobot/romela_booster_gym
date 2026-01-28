@@ -5,8 +5,8 @@ basic:
   sim_device: "cuda:0" # device for physics simulation
   rl_device: "cuda:0" # device for the RL algorithm
   seed: 42 # seed - set to -1 to choose random seed
-  description: "First tests"
-  name: "t1_locomotion_policy"
+  description: "The height was 0.72 before"
+  name: "t1_locomotion_policy_height_0_68"
 
 env:
   num_envs: 4096
@@ -21,9 +21,9 @@ runner:
   save_interval: 500
   use_wandb: true
 
-viewer:
-  pos: [3., -3., 2.]  # [m]
-  lookat: [0., 0., 0.]  # [m]
+viewer: 
+  pos: [1.4, 1.4, 0.1]  # [m]
+  lookat: [0., 0., -0.1]  # [m]
   record_video: true  # only in play
   record_interval: 5.  # [s]
   record_env_idx: 0
@@ -83,7 +83,7 @@ asset:
                   [-0.1015, -0.05, -0.03]] # x,y,z [m]
 
 init_state:
-  pos: [0.0, 0.0, 0.72] # x,y,z [m]
+  pos: [0.0, 0.0, 0.68] # x,y,z [m]
   rot: [0.0, 0.0, 0.0, 1.0] # x,y,z,w [quat]
   lin_vel: [0.0, 0.0, 0.0]  # x,y,z [m/s]
   ang_vel: [0.0, 0.0, 0.0]  # x,y,z [rad/s]

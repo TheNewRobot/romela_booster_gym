@@ -138,9 +138,10 @@ class BaseTask:
             # step graphics
             if self.enable_viewer_sync:
                 if self.camera_follow:
+                    offset = self.cfg["viewer"]["pos"]
                     cam_pos = self.root_states[0, :3].cpu().numpy()
                     cam_target = gymapi.Vec3(cam_pos[0], cam_pos[1], cam_pos[2])
-                    cam_offset = gymapi.Vec3(cam_pos[0] - 2.0, cam_pos[1] - 2.0, cam_pos[2] + 1.0)
+                    cam_offset = gymapi.Vec3(cam_pos[0] + offset[0], cam_pos[1] + offset[1], cam_pos[2] + offset[2])
                     self.gym.viewer_camera_look_at(self.viewer, None, cam_offset, cam_target)
                 self.gym.step_graphics(self.sim)
                 self.gym.draw_viewer(self.viewer, self.sim, True)

@@ -23,6 +23,7 @@ class Runner:
         # prepare the environment
         self._get_args()
         self._update_cfg_from_args()
+        self._load_play_config()
         self._set_seed()
         task_class = eval(self.cfg["basic"]["task"])
         if self.test:
@@ -88,6 +89,27 @@ class Runner:
         else:
             self.cfg["viewer"]["record_video"] = False
 
+    def _load_play_config(self):
+        if not self.test or not self.cfg["basic"]["checkpoint"]:
+            return
+        if (self.cfg["basic"]["checkpoint"] == "-1") or (self.cfg["basic"]["checkpoint"] == -1):
+            self.cfg["basic"]["checkpoint"] = sorted(glob.glob(os.path.join("logs", "**/*.pth"), recursive=True), key=os.path.getmtime)[-1]
+        checkpoint_path = self.cfg["basic"]["checkpoint"]
+        checkpoint_dir = os.path.dirname(os.path.dirname(checkpoint_path))
+        saved_cfg_path = os.path.join(checkpoint_dir, "config.yaml")
+        source_viewer = self.cfg["viewer"].copy()
+        source_basic = self.cfg["basic"].copy()
+        source_env = self.cfg["env"].copy()
+        source_terrain = self.cfg["terrain"]["type"]
+        with open(saved_cfg_path, "r", encoding="utf-8") as f:
+            self.cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+        self.cfg["viewer"] = source_viewer
+        self.cfg["basic"]["checkpoint"] = checkpoint_path
+        self.cfg["basic"]["headless"] = source_basic["headless"]
+        self.cfg["env"]["num_envs"] = source_env["num_envs"]
+        self.cfg["terrain"]["type"] = source_terrain
+        print(f"Config: {saved_cfg_path}")
+
     def _set_seed(self):
         if self.cfg["basic"]["seed"] == -1:
             self.cfg["basic"]["seed"] = np.random.randint(0, 10000)
@@ -102,6 +124,7 @@ class Runner:
 
     def _load(self):
         if not self.cfg["basic"]["checkpoint"]:
+            print(f"Config loaded from: envs/locomotion/{self.args.task}.yaml")
             return
         if (self.cfg["basic"]["checkpoint"] == "-1") or (self.cfg["basic"]["checkpoint"] == -1):
             self.cfg["basic"]["checkpoint"] = sorted(glob.glob(os.path.join("logs", "**/*.pth"), recursive=True), key=os.path.getmtime)[-1]
@@ -278,6 +301,9 @@ class Runner:
 
     def play(self):
         obs, infos = self.env.reset()
+        self.env.gym.simulate(self.env.sim)
+        self.env.gym.fetch_results(self.env.sim, True)
+        self.env.render()
         obs = obs.to(self.device)
         if self.cfg["viewer"]["record_video"]:
             video_dir = os.path.join("videos", self.args.task)
