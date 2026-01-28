@@ -186,7 +186,7 @@ To use [Weights & Biases](https://wandb.ai/) for tracking, log in first:
 $ wandb login
 ```
 
-You can disable W&B tracking by setting `use_wandb` to `false` in the config file.
+You can disable W&B by setting `use_wandb` to `false` in the config file.
 
 ---
 
