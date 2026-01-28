@@ -25,6 +25,8 @@ class Runner:
         self._update_cfg_from_args()
         self._set_seed()
         task_class = eval(self.cfg["basic"]["task"])
+        if self.test:
+            self.cfg["env"]["play"] = True
         self.env = task_class(self.cfg)
 
         self.device = self.cfg["basic"]["rl_device"]
@@ -53,6 +55,7 @@ class Runner:
         parser.add_argument("--max_iterations", type=int, help="Maximum number of training iterations. Overrides config file if provided.")
         parser.add_argument("--name", type=str, help="Experiment name suffix for log folder. Overrides config file if provided.")
         parser.add_argument("--terrain", type=str, help="Terrain type: 'plane' or 'trimesh'. Overrides config file if provided.")
+        parser.add_argument("--record_video", action="store_true", help="Enable video recording during play.")
         self.args = parser.parse_args()
 
     def _find_config(self, task_name):
@@ -80,7 +83,9 @@ class Runner:
                     self.cfg["terrain"]["type"] = getattr(self.args, arg)
                 else:
                     self.cfg["basic"][arg] = getattr(self.args, arg)
-        if not self.test:
+        if self.test:
+            self.cfg["viewer"]["record_video"] = self.args.record_video
+        else:
             self.cfg["viewer"]["record_video"] = False
 
     def _set_seed(self):
@@ -279,7 +284,18 @@ class Runner:
             os.makedirs(video_dir, exist_ok=True)
             name = time.strftime("%Y-%m-%d-%H-%M-%S.mp4", time.localtime())
             record_time = self.cfg["viewer"]["record_interval"]
+        print("\n=== Interactive Play Mode ===")
+        print("Controls: [space] play/pause | [w/s] vx | [a/d] vy | [q/e] vyaw | [r] reset")
+        print("Press [space] to start\n")
         while True:
+            self.env.render()
+            if self.env.reset_triggered:
+                obs, infos = self.env.reset()
+                obs = obs.to(self.device)
+                self.env.reset_triggered = False
+                print("Episode reset")
+            if not self.env.is_playing:
+                continue
             with torch.no_grad():
                 dist = self.model.act(obs)
                 act = dist.loc

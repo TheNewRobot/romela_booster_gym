@@ -360,6 +360,12 @@ class T1(BaseTask):
             self._refresh_feet_state()
 
     def _resample_commands(self):
+        if hasattr(self, 'is_playing') and self.cfg["env"].get("play", False):
+            self.commands[:, 0] = self.cmd_vx
+            self.commands[:, 1] = self.cmd_vy
+            self.commands[:, 2] = self.cmd_vyaw
+            self.gait_frequency[:] = self.cfg["commands"]["gait_frequency"][1] if (self.cmd_vx != 0 or self.cmd_vy != 0 or self.cmd_vyaw != 0) else 0.0
+            return
         env_ids = (self.episode_length_buf == self.cmd_resample_time).nonzero(as_tuple=False).flatten()
         if len(env_ids) == 0:
             return

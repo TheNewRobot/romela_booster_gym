@@ -81,12 +81,27 @@ class BaseTask:
     def set_viewer(self):
         self.viewer = None
         self.camera = None
+        self.is_playing = False
+        self.reset_triggered = False
+        self.cmd_vx = 0.0
+        self.cmd_vy = 0.0
+        self.cmd_vyaw = 0.0
         if not self.headless:
             # if running with a viewer, set up keyboard shortcuts and camera
             self.enable_viewer_sync = True
             self.viewer = self.gym.create_viewer(self.sim, gymapi.CameraProperties())
             self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_ESCAPE, "QUIT")
             self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_V, "toggle_viewer_sync")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_O, "toggle_camera_follow")
+            self.camera_follow = True
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_SPACE, "toggle_play")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_R, "reset")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_W, "vx_up")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_S, "vx_down")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_A, "vy_up")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_D, "vy_down")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_Q, "vyaw_up")
+            self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_E, "vyaw_down")
             position = self.cfg["viewer"]["pos"]
             lookat = self.cfg["viewer"]["lookat"]
             cam_pos = gymapi.Vec3(position[0], position[1], position[2])
@@ -105,6 +120,16 @@ class BaseTask:
                     sys.exit()
                 elif evt.action == "toggle_viewer_sync" and evt.value > 0:
                     self.enable_viewer_sync = not self.enable_viewer_sync
+                elif evt.action == "toggle_camera_follow" and evt.value > 0:
+                    self.camera_follow = not self.camera_follow
+                    print(f"Camera follow: {'ON' if self.camera_follow else 'OFF'}")
+                elif evt.action == "toggle_play" and evt.value > 0:
+                    self.is_playing = not self.is_playing
+                    print(f"{'Playing' if self.is_playing else 'Paused'}")
+                elif evt.action == "reset" and evt.value > 0:
+                    self.reset_triggered = True
+                elif evt.value > 0:
+                    self._handle_velocity_event(evt.action)
 
             # fetch results
             if self.device != "cpu":
@@ -112,6 +137,11 @@ class BaseTask:
 
             # step graphics
             if self.enable_viewer_sync:
+                if self.camera_follow:
+                    cam_pos = self.root_states[0, :3].cpu().numpy()
+                    cam_target = gymapi.Vec3(cam_pos[0], cam_pos[1], cam_pos[2])
+                    cam_offset = gymapi.Vec3(cam_pos[0] - 2.0, cam_pos[1] - 2.0, cam_pos[2] + 1.0)
+                    self.gym.viewer_camera_look_at(self.viewer, None, cam_offset, cam_target)
                 self.gym.step_graphics(self.sim)
                 self.gym.draw_viewer(self.viewer, self.sim, True)
                 self.gym.sync_frame_time(self.sim)
@@ -138,3 +168,20 @@ class BaseTask:
             self.gym.render_all_camera_sensors(self.sim)
             img = self.gym.get_camera_image(self.sim, self.envs[self.cfg["viewer"]["record_env_idx"]], self.camera, gymapi.IMAGE_COLOR)
             self.camera_frames.append(img.reshape(img.shape[0], -1, 4))
+
+    def _handle_velocity_event(self, action):
+        old_vx, old_vy, old_vyaw = self.cmd_vx, self.cmd_vy, self.cmd_vyaw
+        if action == "vx_up":
+            self.cmd_vx = min(self.cmd_vx + 0.1, 1.0)
+        elif action == "vx_down":
+            self.cmd_vx = max(self.cmd_vx - 0.1, -1.0)
+        elif action == "vy_up":
+            self.cmd_vy = min(self.cmd_vy + 0.1, 1.0)
+        elif action == "vy_down":
+            self.cmd_vy = max(self.cmd_vy - 0.1, -1.0)
+        elif action == "vyaw_up":
+            self.cmd_vyaw = min(self.cmd_vyaw + 0.1, 1.0)
+        elif action == "vyaw_down":
+            self.cmd_vyaw = max(self.cmd_vyaw - 0.1, -1.0)
+        if (self.cmd_vx, self.cmd_vy, self.cmd_vyaw) != (old_vx, old_vy, old_vyaw):
+            print(f"Velocity: vx={self.cmd_vx:.1f}, vy={self.cmd_vy:.1f}, vyaw={self.cmd_vyaw:.1f}")

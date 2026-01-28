@@ -223,6 +223,17 @@ $ python scripts/export_model.py --task=T1 --checkpoint=-1
 
 After exporting the model, follow the steps in [Deploy on Booster Robot](deploy/README.md) to complete the deployment process.
 
+#### 4. Visualize Poses
+
+Check robot poses and spawn heights without running a full policy:
+```sh
+python scripts/visualize_poses.py --task=T1 --list              # List available poses
+python scripts/visualize_poses.py --task=T1                     # Default pose
+python scripts/visualize_poses.py --task=T1 --pose=crouch --height=0.55
+```
+
+Poses are defined in `envs/locomotion/t1_poses.yaml`. Useful for checking floor collisions at different heights.
+
 ---
 
 ## RoboCup 2025 Roadmap
