@@ -212,6 +212,7 @@ python scripts/play_mujoco.py --task=T1 --checkpoint=-1
 ```
 
 ---
+> **Note:** If you want a policy to test under logs/T1 you can try this downloading this one from th GD ([link](https://drive.google.com/drive/u/0/folders/12TgtOTZgYkOfdfY87yxspMiDf8GNqK6m))
 
 ### 3. Deployment
 
@@ -223,7 +224,7 @@ $ python scripts/export_model.py --task=T1 --checkpoint=-1
 
 After exporting the model, follow the steps in [Deploy on Booster Robot](deploy/README.md) to complete the deployment process.
 
-#### 4. Visualize Poses
+### 4. Visualize Poses
 
 Check robot poses and spawn heights without running a full policy:
 ```sh
