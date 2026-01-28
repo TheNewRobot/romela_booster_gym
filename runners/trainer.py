@@ -51,6 +51,7 @@ class Runner:
         parser.add_argument("--rl_device", type=str, help="Device for the RL algorithm. Overrides config file if provided.")
         parser.add_argument("--seed", type=int, help="Random seed. Overrides config file if provided.")
         parser.add_argument("--max_iterations", type=int, help="Maximum number of training iterations. Overrides config file if provided.")
+        parser.add_argument("--name", type=str, help="Experiment name suffix for log folder. Overrides config file if provided.")
         self.args = parser.parse_args()
 
     def _find_config(self, task_name):

@@ -147,6 +147,28 @@ Training settings are loaded from `envs/<task>.yaml`. You can also override conf
 - `--rl_device`: Device for the RL algorithm (e.g., `cuda:0`, `cpu`). 
 - `--seed`: Random seed.
 - `--max_iterations`: Maximum number of training iterations.
+- `--name`: Experiment name suffix for the log folder.
+
+#### Resuming Training from Checkpoint
+
+To continue training from a previous run, use the `--checkpoint` argument:
+```sh
+# Resume from the most recent checkpoint
+$ python scripts/train.py --task=T1 --checkpoint=-1
+
+# Resume from a specific checkpoint
+$ python scripts/train.py --task=T1 --checkpoint=logs/T1/2026-01-27-00-28-31/nn/model_500.pth
+```
+
+**What gets loaded:**
+- Model weights
+- Optimizer state (learning rate, momentum, etc.)
+- Curriculum progress (if using curriculum learning)
+
+**Note:** Resuming creates a new log folder. The iteration counter resets to 0, but training continues from the loaded weights. Use `--name` to label resumed experiments:
+```sh
+$ python scripts/train.py --task=T1 --checkpoint=-1 --name=resumed_higher_vel
+```
 
 To add a new task, create a config file in `envs/` and register the environment in `envs/__init__.py`.
 

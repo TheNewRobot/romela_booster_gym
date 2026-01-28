@@ -1,11 +1,12 @@
 basic:
   checkpoint: null # set to -1 to load last saved model
   headless: false
-  max_iterations: 10000 # set the maximum number of learning iterations to train for
+  max_iterations: 5000 # set the maximum number of learning iterations to train for
   sim_device: "cuda:0" # device for physics simulation
   rl_device: "cuda:0" # device for the RL algorithm
   seed: 42 # seed - set to -1 to choose random seed
-  description: ""
+  description: "First tests"
+  name: "t1_locomotion_policy"
 
 env:
   num_envs: 4096
@@ -17,7 +18,7 @@ env:
 runner:
   horizon_length: 24
   mini_epochs: 20
-  save_interval: 100
+  save_interval: 500
   use_wandb: true
 
 viewer:
