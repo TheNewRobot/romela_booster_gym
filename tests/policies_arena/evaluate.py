@@ -5,28 +5,32 @@ Tests locomotion policies through progressive difficulty stages.
 Policies that fail a stage are eliminated; survivors advance.
 
 Usage:
-    python tests/policies_arena/evaluate.py --config=tests/policies_arena/arena_config.yaml
-    python tests/policies_arena/evaluate.py --config=tests/policies_arena/arena_config.yaml --headless=False
+    python tests/policies_arena/evaluate.py --task=T1
+    python tests/policies_arena/evaluate.py --task=T1 --config=tests/policies_arena/arena_config.yaml
+    python tests/policies_arena/evaluate.py --task=T1 --headless=False
+
+Note: Due to Isaac Gym limitations (one simulation per process), this script
+spawns subprocesses for each terrain type automatically.
 """
 import os
 import sys
 import yaml
 import csv
+import json
 import shutil
 import random
+import subprocess
+import tempfile
 from datetime import datetime
 from collections import OrderedDict
 
 import numpy as np
 
-# Must import isaacgym before torch modules that use it
+# Isaac Gym imports (must be before other gym-related imports)
 import isaacgym
-from isaacgym import gymtorch
-import torch
-
 from envs import *
 from policies.actor_critic import ActorCritic
-
+import torch
 
 def load_yaml(path):
     """Load YAML file."""
@@ -46,7 +50,7 @@ def find_task_config(task_name="T1"):
 class PolicyArenaEvaluator:
     """Evaluates policies through progressive difficulty stages."""
     
-    def __init__(self, config_path, task="T1", headless_override=None):
+    def __init__(self, config_path, task="T1", headless_override=None, worker_mode=False):
         """
         Initialize evaluator.
         
@@ -54,10 +58,12 @@ class PolicyArenaEvaluator:
             config_path: Path to arena_config.yaml
             task: Task/robot name (e.g., 'T1')
             headless_override: Override headless setting from CLI (True/False/None)
+            worker_mode: If True, skip output dir setup (worker will use temp dir)
         """
         self.config = load_yaml(config_path)
         self.config_path = config_path
         self.task = task
+        self.worker_mode = worker_mode
         
         # Apply headless override if specified
         if headless_override is not None:
@@ -66,11 +72,10 @@ class PolicyArenaEvaluator:
         # Extract config sections
         self._parse_config()
         
-        # Setup output directory
-        self._setup_output_dir()
-        
-        # Print header
-        self._print_header()
+        # Setup output directory (coordinator only)
+        if not worker_mode:
+            self._setup_output_dir()
+            self._print_header()
     
     def _parse_config(self):
         """Parse configuration into instance variables."""
@@ -138,8 +143,8 @@ class PolicyArenaEvaluator:
         print(f"  Total envs:     {self.total_envs}")
         print(f"  Stages:         {len(self.stages)}")
         print(f"  Stage duration: {self.stage_duration_s}s")
-        print(f"  Device:         {self.device}")
         print(f"  Task:           {self.task}")
+        print(f"  Device:         {self.device}")
         print(f"  Headless:       {self.headless}")
         print(f"  Output:         {self.output_dir}")
         print(f"{'='*width}\n")
@@ -162,7 +167,7 @@ class PolicyArenaEvaluator:
             terrain_name: Key from terrains config
             
         Returns:
-            T1 environment instance
+            Environment instance
         """
         # Load base task config
         task_cfg_path = find_task_config(self.task)
@@ -198,7 +203,7 @@ class PolicyArenaEvaluator:
         # Play mode reduces some randomization
         cfg['env']['play'] = True
         
-        # Create environment
+        # Create environment (dynamically get task class)
         task_class = eval(self.task)
         env = task_class(cfg)
         
@@ -310,8 +315,10 @@ class PolicyArenaEvaluator:
         terrain_name = stage_cfg['terrain']
         tracking_threshold = stage_cfg.get('tracking_threshold')
         
-        print(f"\nStage {stage_idx + 1}/{len(self.stages)}: {stage_name}")
-        print(f"  Terrain: {terrain_name}, Commands: vx={stage_cfg['vx']}, vy={stage_cfg['vy']}, vyaw={stage_cfg['vyaw']}")
+        print(f"\n{'─'*50}")
+        print(f"Stage {stage_idx + 1}/{len(self.stages)}: {stage_name}")
+        print(f"Terrain: {terrain_name} | Commands: vx={stage_cfg['vx']}, vy={stage_cfg['vy']}, vyaw={stage_cfg['vyaw']}")
+        print(f"{'─'*50}")
         
         # Set seed for reproducibility
         self._set_seed(stage_idx)
@@ -407,7 +414,7 @@ class PolicyArenaEvaluator:
             
             # Skip eliminated policies
             if not self.policy_status[policy_name]['alive']:
-                print(f"  {policy_name}: --SKIPPED-- (eliminated)")
+                print(f"\n  ► {policy_name}: SKIPPED (eliminated)")
                 continue
             
             env_slice = policy['env_slice']
@@ -486,82 +493,169 @@ class PolicyArenaEvaluator:
             # Print result
             status = "PASS ✓" if passed else "FAIL ✗"
             
+            print(f"\n  ► {policy_name}: {status}")
+            print(f"      Survival: {survival_rate*100:.1f}% ({num_survived}/{num_policy_envs})")
+            
             if tracking_threshold is not None:
-                print(f"  {policy_name}: {status}")
-                print(f"    Survival: {survival_rate*100:.1f}% ({num_survived}/{num_policy_envs})")
-                print(f"    Tracking: vx={vx_err_mean:.3f}, vy={vy_err_mean:.3f}, vyaw={vyaw_err_mean:.3f} (threshold: {tracking_threshold})")
+                print(f"      Tracking: vx={vx_err_mean:.3f}, vy={vy_err_mean:.3f}, vyaw={vyaw_err_mean:.3f}")
             else:
-                print(f"  {policy_name}: {status}")
-                print(f"    Survival: {survival_rate*100:.1f}% ({num_survived}/{num_policy_envs})")
-                print(f"    Height: {height_mean:.3f}m")
+                print(f"      Height: {height_mean:.3f}m")
             
             if not passed:
-                print(f"    → ELIMINATED")
+                print(f"      → ELIMINATED")
         
         return stage_results
     
+    def run_worker(self, terrain_name, stage_indices, temp_output_path):
+        """
+        Worker mode: Run stages for a single terrain and save results.
+        
+        This is called in a subprocess to work around Isaac Gym's
+        one-simulation-per-process limitation.
+        
+        Args:
+            terrain_name: Terrain to use for all stages
+            stage_indices: List of stage indices to run
+            temp_output_path: Path to write JSON results
+        """
+        print(f"\n{'─'*60}")
+        print(f"[Worker] Creating environment for terrain: {terrain_name}")
+        print(f"[Worker] Stages to run: {[i+1 for i in stage_indices]}")
+        print(f"{'─'*60}")
+        
+        # Create environment (only once per worker)
+        env = self._create_env(terrain_name)
+        
+        # Load policies
+        print("\n[Worker] Loading policies...")
+        policies = self._load_policies(env)
+        
+        # Run each stage
+        for stage_idx in stage_indices:
+            # Check if any policy is still alive
+            any_alive = any(s['alive'] for s in self.policy_status.values())
+            if not any_alive:
+                print("\n[Worker] All policies eliminated. Stopping.")
+                break
+            
+            stage_cfg = self.stages[stage_idx]
+            self._run_stage(env, policies, stage_idx, stage_cfg)
+        
+        # Save results and policy status to temp file
+        output_data = {
+            'results': self.results,
+            'policy_status': dict(self.policy_status)
+        }
+        
+        with open(temp_output_path, 'w') as f:
+            json.dump(output_data, f)
+        
+        print(f"\n[Worker] Results saved to: {temp_output_path}")
+    
     def run(self):
-        """Run full evaluation through all stages."""
-        # Group stages by terrain to minimize environment recreation
+        """
+        Run full evaluation through all stages.
+        
+        Uses subprocesses for each terrain type to work around
+        Isaac Gym's one-simulation-per-process limitation.
+        """
+        # Group stages by terrain
         terrain_to_stages = OrderedDict()
         for idx, stage in enumerate(self.stages):
             terrain = stage['terrain']
             if terrain not in terrain_to_stages:
                 terrain_to_stages[terrain] = []
-            terrain_to_stages[terrain].append((idx, stage))
+            terrain_to_stages[terrain].append(idx)
         
-        # Track which stages we've processed
-        processed_stages = set()
+        print(f"Terrain groups: {dict(terrain_to_stages)}")
         
-        # Process stages in order, grouping by terrain
-        for stage_idx, stage in enumerate(self.stages):
-            # Skip if already processed (due to terrain grouping)
-            if stage_idx in processed_stages:
-                continue
-            
-            # Check if any policy is still alive
-            any_alive = any(s['alive'] for s in self.policy_status.values())
-            if not any_alive:
-                print("\n[!] All policies eliminated. Stopping evaluation.")
-                break
-            
-            terrain = stage['terrain']
-            
-            # Create environment for this terrain
-            print(f"\n{'─'*60}")
-            print(f"Creating environment for terrain: {terrain}")
-            print(f"{'─'*60}")
-            
-            env = self._create_env(terrain)
-            
-            # Load all policies
-            print("\nLoading policies...")
-            policies = self._load_policies(env)
-            
-            # Run all stages that use this terrain
-            for idx, stg in terrain_to_stages[terrain]:
-                # Skip if already processed or out of order
-                if idx in processed_stages or idx < stage_idx:
-                    continue
-                
-                processed_stages.add(idx)
-                
+        # Create temp directory for inter-process communication
+        temp_dir = tempfile.mkdtemp(prefix="arena_eval_")
+        print(f"Temp directory: {temp_dir}")
+        
+        try:
+            # Process each terrain group in a subprocess
+            for terrain_name, stage_indices in terrain_to_stages.items():
                 # Check if any policy is still alive
                 any_alive = any(s['alive'] for s in self.policy_status.values())
                 if not any_alive:
+                    print("\n[!] All policies eliminated. Stopping evaluation.")
                     break
                 
-                # Run the stage
-                self._run_stage(env, policies, idx, stg)
-            
-            # Cleanup environment
-            print(f"\nCleaning up environment for terrain: {terrain}")
-            del env
-            del policies
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+                # Prepare temp output path for this worker
+                temp_output = os.path.join(temp_dir, f"{terrain_name}.json")
+                
+                # Build subprocess command
+                cmd = [
+                    sys.executable,
+                    '-u',
+                    __file__,
+                    f"--task={self.task}",
+                    f"--config={self.config_path}",
+                    f"--headless={'true' if self.headless else 'false'}",
+                    "--worker",
+                    f"--terrain={terrain_name}",
+                    f"--stages={','.join(str(i) for i in stage_indices)}",
+                    f"--temp-output={temp_output}",
+                    f"--policy-status={json.dumps(dict(self.policy_status))}"
+                ]
+                
+                print(f"\n{'='*60}")
+                print(f"Spawning worker for terrain: {terrain_name}")
+                print(f"Stages: {[i+1 for i in stage_indices]}")
+                print(f"{'='*60}")
+                
+                # Run subprocess
+                skip_patterns = [
+                    'Importing module', 'Setting GYM_USD', 'PyTorch version',
+                    'Device count', 'gymtorch', 'Using /home', 'Emitting ninja',
+                    'Building extension', 'Allowing ninja', 'ninja:', 'Loading extension',
+                    'TypedStorage is deprecated', 'return self.fget', '_bindings/src'
+                ]
+                
+                process = subprocess.Popen(
+                    cmd,
+                    cwd=os.getcwd(),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1  # Line buffered
+                )
+                
+                # Stream output line by line, filtering noise
+                for line in process.stdout:
+                    line = line.rstrip('\n')
+                    if any(skip in line for skip in skip_patterns):
+                        continue
+                    if line.strip():
+                        print(line)
+                
+                process.wait()
+                
+                if process.returncode != 0:
+                    print(f"\n[!] Worker failed with return code {process.returncode}")
+                    break
+                
+                # Load results from worker
+                if os.path.exists(temp_output):
+                    with open(temp_output, 'r') as f:
+                        worker_data = json.load(f)
+                    
+                    # Merge results
+                    self.results.extend(worker_data['results'])
+                    
+                    # Update policy status
+                    for name, status in worker_data['policy_status'].items():
+                        self.policy_status[name] = status
+                else:
+                    print(f"\n[!] Worker output not found: {temp_output}")
+                    break
         
-        # Save results and print summary
+        finally:
+            # Cleanup temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        
+        # Save final results and print summary
         self._save_results()
         self._print_summary()
     
@@ -638,6 +732,13 @@ def main():
         help='Override headless setting (true/false)'
     )
     
+    # Worker mode arguments (used internally for subprocesses)
+    parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--terrain', type=str, help=argparse.SUPPRESS)
+    parser.add_argument('--stages', type=str, help=argparse.SUPPRESS)
+    parser.add_argument('--temp-output', type=str, help=argparse.SUPPRESS)
+    parser.add_argument('--policy-status', type=str, help=argparse.SUPPRESS)
+    
     args = parser.parse_args()
     
     # Parse headless override
@@ -650,7 +751,27 @@ def main():
         print(f"[!] Config file not found: {args.config}")
         sys.exit(1)
     
-    # Run evaluation
+    # Worker mode - run in subprocess for single terrain
+    if args.worker:
+        evaluator = PolicyArenaEvaluator(
+            args.config, 
+            args.task, 
+            headless_override, 
+            worker_mode=True
+        )
+        
+        # Restore policy status from coordinator
+        if args.policy_status:
+            evaluator.policy_status = OrderedDict(json.loads(args.policy_status))
+        
+        # Parse stage indices
+        stage_indices = [int(i) for i in args.stages.split(',')]
+        
+        # Run worker
+        evaluator.run_worker(args.terrain, stage_indices, args.temp_output)
+        return
+    
+    # Coordinator mode - orchestrate evaluation
     evaluator = PolicyArenaEvaluator(args.config, args.task, headless_override)
     
     try:
