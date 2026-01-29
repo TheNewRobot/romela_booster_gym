@@ -2,7 +2,7 @@ import sys
 from isaacgym import gymapi, gymutil
 import torch
 from utils.terrain import Terrain
-
+from utils.gamepad import GamepadController
 
 class BaseTask:
     def __init__(self, cfg):
@@ -102,6 +102,18 @@ class BaseTask:
             self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_D, "vy_down")
             self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_Q, "vyaw_up")
             self.gym.subscribe_viewer_keyboard_event(self.viewer, gymapi.KEY_E, "vyaw_down")
+            # Initialize gamepad for play mode only
+            self.gamepad = None
+            if self.cfg["env"].get("play", False):
+                cmd_cfg = self.cfg.get("commands", {})
+                max_vx = cmd_cfg.get("max_lin_vel_x", 1.0)
+                max_vy = cmd_cfg.get("max_lin_vel_y", 1.0)
+                max_vyaw = cmd_cfg.get("max_ang_vel", 1.0)
+                self.gamepad = GamepadController(max_vx=max_vx, max_vy=max_vy, max_vyaw=max_vyaw, verbose=True)
+                if self.gamepad.is_connected():
+                    print("[Play] Using Xbox controller for velocity commands")
+                else:
+                    print("[Play] Using keyboard for velocity commands (WASD/QE)")
             position = self.cfg["viewer"]["pos"]
             lookat = self.cfg["viewer"]["lookat"]
             cam_pos = gymapi.Vec3(position[0], position[1], position[2])
@@ -113,7 +125,8 @@ class BaseTask:
             # check for window closed
             if self.gym.query_viewer_has_closed(self.viewer):
                 sys.exit()
-
+            if hasattr(self, 'gamepad') and self.gamepad and self.gamepad.is_connected():
+                self.cmd_vx, self.cmd_vy, self.cmd_vyaw = self.gamepad.poll()
             # check for keyboard events
             for evt in self.gym.query_viewer_action_events(self.viewer):
                 if evt.action == "QUIT" and evt.value > 0:

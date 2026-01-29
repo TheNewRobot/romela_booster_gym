@@ -203,6 +203,30 @@ python scripts/play.py --task=T1 --checkpoint=-1 --num_envs=1 --terrain=plane
 
 Videos of the evaluation are automatically saved in `videos/<date-time>.mp4`. You can disable video recording by setting `record_video` to `false` in the config file.
 
+#### Interactive Controls
+
+Play mode supports keyboard and Xbox controller input for velocity commands.
+
+**Keyboard:**
+| Key | Action |
+|-----|--------|
+| `Space` | Play/Pause |
+| `W/S` | Increase/Decrease vx (forward/back) |
+| `A/D` | Increase/Decrease vy (left/right) |
+| `Q/E` | Increase/Decrease vyaw (turn) |
+| `R` | Reset episode |
+| `O` | Toggle camera follow |
+
+**Xbox Controller:**
+If detected, the controller takes priority. Analog sticks provide smooth velocity control:
+- Left stick Y → vx (forward/back)
+- Left stick X → vy (strafe)
+- Right stick X → vyaw (turn)
+
+Max velocities are read from `commands.max_lin_vel_x`, `max_lin_vel_y`, `max_ang_vel` in your task config.
+
+To disable velocity printing, set `verbose=False` in `GamepadController` init (see `base_task.py`).
+
 #### Cross-Simulation Testing
 
 To test the policy in MuJoCo (sim-to-sim transfer validation):
