@@ -3,5 +3,6 @@
 /isaacgym
 /videos
 /logs
+/exps
 
 __pycache__/

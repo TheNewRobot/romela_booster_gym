@@ -1,0 +1,154 @@
+# ============================================================
+# Policy Arena Configuration
+# ============================================================
+# This file defines all parameters for policy evaluation.
+# Modify values here to customize the evaluation without
+# changing the script.
+
+# ------------------------------------------------------------
+# Policies to Evaluate
+# ------------------------------------------------------------
+# Add as many policies as you want to compare.
+# Each policy needs a unique name and path to checkpoint.
+policies:
+  - name: "baseline"
+    checkpoint: "logs/T1/2026-01-28-11-49-20_t1_locomotion_policy_height_0_68/nn/model_10000.pth"
+  - name: "training"
+    checkpoint: "logs/T1/2026-01-28-11-49-20_t1_locomotion_policy_height_0_68/nn/model_1000.pth"
+  # - name: "experimental"
+  #   checkpoint: "logs/T1/2026-01-28-10-00-00/nn/model_3000.pth"
+
+# ------------------------------------------------------------
+# Evaluation Settings
+# ------------------------------------------------------------
+evaluation:
+  num_envs_per_policy: 64    # Parallel envs per policy (more = better statistics)
+  survival_threshold: 0.9    # 90% of envs must survive to pass stage
+  seed: 42                   # Base random seed for reproducibility
+  headless: true             # Run without visualization
+
+# ------------------------------------------------------------
+# Timing Configuration (seconds)
+# ------------------------------------------------------------
+timing:
+  stage_duration_s: 10.0     # Total duration of each stage
+  settle_duration_s: 2.0     # Stand still before ramping commands
+  ramp_duration_s: 0.5       # Linear ramp from zero to target command
+  metrics_window_ratio: 0.5  # Collect metrics over last X% of stage
+
+# ------------------------------------------------------------
+# Terrain Definitions
+# ------------------------------------------------------------
+# Define terrain types that stages can reference.
+# Use generic names (slope_a, rough_a) so you can change
+# parameters without renaming.
+#
+# For trimesh terrains:
+#   - proportions: [plane, slope, random, discrete]
+#   - slope: gradient for slope terrain (tan of angle)
+#   - random_height: max height variation for rough terrain
+terrains:
+  flat:
+    type: "plane"
+  
+  slope_a:
+    type: "trimesh"
+    slope: 0.087              # ~5 degrees (tan(5°))
+    proportions: [0.0, 1.0, 0.0, 0.0]
+  
+  slope_b:
+    type: "trimesh"
+    slope: 0.176              # ~10 degrees (tan(10°))
+    proportions: [0.0, 1.0, 0.0, 0.0]
+  
+  rough_a:
+    type: "trimesh"
+    random_height: 0.02       # 2cm roughness
+    proportions: [0.0, 0.0, 1.0, 0.0]
+  
+  rough_b:
+    type: "trimesh"
+    random_height: 0.05       # 5cm roughness
+    proportions: [0.0, 0.0, 1.0, 0.0]
+
+# ------------------------------------------------------------
+# Stage Definitions
+# ------------------------------------------------------------
+# Each stage defines:
+#   - name: Display name for console output
+#   - terrain: Reference to terrain defined above
+#   - vx, vy, vyaw: Target velocity commands
+#   - tracking_threshold: Max allowed tracking error (null = survival only)
+#
+# Policies progress through stages in order.
+# A policy is eliminated when it fails a stage.
+stages:
+  - name: "Stand Still"
+    terrain: "flat"
+    vx: 0.0
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: null  # Survival only, no tracking check
+
+  - name: "Forward Slow"
+    terrain: "flat"
+    vx: 0.5
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: 0.1
+
+  - name: "Forward Fast"
+    terrain: "flat"
+    vx: 1.0
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: 0.15
+
+  - name: "Lateral"
+    terrain: "flat"
+    vx: 0.0
+    vy: 0.5
+    vyaw: 0.0
+    tracking_threshold: 0.1
+
+  - name: "Rotation"
+    terrain: "flat"
+    vx: 0.0
+    vy: 0.0
+    vyaw: 0.5
+    tracking_threshold: 0.15
+
+  - name: "Combined"
+    terrain: "flat"
+    vx: 0.5
+    vy: 0.3
+    vyaw: 0.0
+    tracking_threshold: 0.15
+
+  - name: "Slope Easy"
+    terrain: "slope_a"
+    vx: 0.5
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: 0.15
+
+  - name: "Slope Hard"
+    terrain: "slope_b"
+    vx: 0.5
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: 0.15
+
+  - name: "Rough Easy"
+    terrain: "rough_a"
+    vx: 0.5
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: 0.15
+
+  - name: "Rough Hard"
+    terrain: "rough_b"
+    vx: 0.5
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: 0.15
