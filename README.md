@@ -254,7 +254,7 @@ Check robot poses and spawn heights without running a full policy:
 ```sh
 python scripts/visualize_poses.py --task=T1 --list              # List available poses
 python scripts/visualize_poses.py --task=T1                     # Default pose
-python scripts/visualize_poses.py --task=T1 --pose=crouch --height=0.55
+python scripts/visualize_poses.py --task=T1 --pose=crouch --height=0.68
 ```
 
 Poses are defined in `envs/locomotion/t1_poses.yaml`. Useful for checking floor collisions at different heights.
