@@ -212,7 +212,7 @@ python scripts/play_mujoco.py --task=T1 --checkpoint=-1
 ```
 
 ---
-> **Note:** If you want a policy to test under logs/T1, you can try this downloading this one from GD ([link](https://drive.google.com/drive/u/0/folders/12TgtOTZgYkOfdfY87yxspMiDf8GNqK6m))
+> **Note:** If you want a policy to test under logs/T1, you can try this downloading this one from GD called baseline ([link](https://drive.google.com/drive/folders/12TgtOTZgYkOfdfY87yxspMiDf8GNqK6m?usp=drive_link))
 
 ### 3. Deployment
 
