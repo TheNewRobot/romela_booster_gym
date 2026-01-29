@@ -229,7 +229,7 @@ To disable velocity printing, set `verbose=False` in `GamepadController` init (s
 
 #### Cross-Simulation Testing
 
-To test the policy in MuJoCo (sim-to-sim transfer validation):
+To test the policy in MuJoCo (sim-to-sim transfer validation)
 
 ```sh
 python scripts/play_mujoco.py --task=T1 --checkpoint=-1
