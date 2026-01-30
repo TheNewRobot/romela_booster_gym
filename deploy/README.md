@@ -14,6 +14,57 @@ Follow these steps to set up your environment:
 
     Refer to the [Booster Robotics SDK Guide](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-WDzedC8AiovU8gxSjeGcQ5CInSf) and ensure you complete the section on [Compile Sample Programs and Install Python SDK](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-EI5fdtSucoJWO4xd49QcE5JxnCf).
 
+
+## Export Model
+
+Convert trained `.pth` checkpoint to JIT format for deployment:
+```bash
+python scripts/export_model.py --checkpoint=logs/T1//nn/model_XXXX.pth
+```
+
+Output: `deploy/models/T1/model_XXXX.pt`
+
+## Testing Policies
+
+### Isaac Gym (play_jit.py)
+```bash
+python scripts/play_jit.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt
+```
+
+Same controls as `play.py` (WASD, QE, Space, O, R).
+
+### MuJoCo (play_mujoco.py)
+```bash
+python scripts/play_mujoco.py --policy=deploy/models/T1/model_XXXX.pt --task=T1
+```
+
+#### Keyboard Controls
+
+| Key | Action |
+|-----|--------|
+| **↑ / ↓** | Forward / Backward |
+| **← / →** | Strafe Left / Right |
+| **Q / E** | Turn Left / Right |
+| **Space** | Pause / Unpause |
+| **R** | Reset pose |
+| **O** | Toggle camera follow |
+
+#### MuJoCo Viewer Tips
+
+| Key | Action |
+|-----|--------|
+| **Tab** | Toggle GUI panel |
+| **F** | Cycle frame visualization |
+| **T** | Toggle transparency |
+| **C** | Show contact points |
+
+To show world axes: **Tab** → Rendering → Frame → World
+
+## Sim2Real Data Collection
+
+For recording real robot data and comparing with simulation, see the [romela_booster_data](https://github.com/TheNewRobot/romela_booster_data) repository.
+
+
 ## Usage
 
 1. Prepare the robot:

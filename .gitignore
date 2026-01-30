@@ -4,5 +4,6 @@
 /videos
 /logs
 /exps
+deploy/models/
 
 __pycache__/
