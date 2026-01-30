@@ -306,6 +306,9 @@ class T1(BaseTask):
         self._reset_dofs(env_ids)
         self._reset_root_states(env_ids)
 
+        self.actions[env_ids] = 0
+        self.last_actions[env_ids] = 0
+        self.gait_process[env_ids] = 0
         self.last_dof_targets[env_ids] = self.dof_pos[env_ids]
         self.last_root_vel[env_ids] = self.root_states[env_ids, 7:13]
         self.episode_length_buf[env_ids] = 0

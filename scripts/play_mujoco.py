@@ -1,17 +1,19 @@
 import os
-import sys
-import glob
 import yaml
 import argparse
 import numpy as np
 import torch
 import mujoco, mujoco.viewer
-from policies.actor_critic import *
+from utils.config_loader import find_experiment_config, load_config
+from utils.policy_loader import load_policy
+
+# === CONFIGURABLE PARAMETERS ===
+CAM_OFFSET = [-2.0, -2.0, -0.5]  # [x, y, z] camera offset for chase mode
+FRICTION_OVERRIDE = None  # None=default, float=sliding only, [a,b,c]=all three
 
 LEG_JOINT_START = 11
 LEG_JOINT_END = 23
 NUM_LEG_JOINTS = 12
-
 
 def quat_rotate_inverse(q, v):
     q_w = q[-1]
@@ -29,36 +31,6 @@ def offset_to_spherical(offset):
     azimuth = np.degrees(np.arctan2(y, x))
     elevation = np.degrees(np.arcsin(z / distance)) if distance > 0 else 0
     return distance, azimuth, elevation
-
-
-def find_experiment_config(policy_path):
-    """Auto-detect config.yaml from policy's experiment folder."""
-    policy_dir = os.path.dirname(os.path.abspath(policy_path))
-    
-    # If policy is in nn/ subfolder, go up one level
-    if os.path.basename(policy_dir) == "nn":
-        experiment_dir = os.path.dirname(policy_dir)
-        config_path = os.path.join(experiment_dir, "config.yaml")
-        if os.path.exists(config_path):
-            return config_path
-    return None
-
-
-def load_policy(policy_path, cfg):
-    """Load policy - supports both .pth (ActorCritic) and .pt (JIT)."""
-    is_jit = policy_path.endswith(".pt")
-    
-    if is_jit:
-        policy = torch.jit.load(policy_path, map_location="cpu")
-        policy.eval()
-        return policy, True
-    else:
-        model = ActorCritic(cfg["env"]["num_actions"], cfg["env"]["num_observations"], cfg["env"]["num_privileged_obs"])
-        model_dict = torch.load(policy_path, map_location="cpu", weights_only=True)
-        model.load_state_dict(model_dict["model"])
-        model.eval()
-        return model, False
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -82,8 +54,7 @@ if __name__ == "__main__":
         else:
             raise ValueError("Could not find config. Provide --config or --task, or ensure config.yaml exists in experiment folder.")
 
-    with open(cfg_file, "r", encoding="utf-8") as f:
-        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+    cfg = load_config(cfg_file)
 
     print(f"Loading policy from {args.policy}")
     policy, is_jit = load_policy(args.policy, cfg)
@@ -93,6 +64,21 @@ if __name__ == "__main__":
     mj_model.opt.timestep = cfg["sim"]["dt"]
     mj_data = mujoco.MjData(mj_model)
     mujoco.mj_resetData(mj_model, mj_data)
+    
+    # Floor friction handling
+    ground_geom_id = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_GEOM, "ground")
+    if ground_geom_id >= 0:
+        default_friction = mj_model.geom_friction[ground_geom_id].copy()
+        if FRICTION_OVERRIDE is not None:
+            if isinstance(FRICTION_OVERRIDE, (list, tuple)):
+                mj_model.geom_friction[ground_geom_id] = FRICTION_OVERRIDE
+            else:
+                mj_model.geom_friction[ground_geom_id][0] = FRICTION_OVERRIDE
+            print(f"Ground friction [sliding, torsional, rolling]: {mj_model.geom_friction[ground_geom_id]} (overridden)")
+        else:
+            print(f"Ground friction [sliding, torsional, rolling]: {default_friction} (default)")
+    else:
+        print("Warning: 'ground' geom not found in MuJoCo model")
     
     # Initialize default positions and PD gains for all actuators
     num_actuators = mj_model.nu
@@ -162,7 +148,7 @@ if __name__ == "__main__":
     cmd_limits = {"vx": (-1.0, 1.0), "vy": (-1.0, 1.0), "vyaw": (-1.0, 1.0)}
     
     # Camera settings from config
-    cam_offset = [-2.0, -2.0, -0.5]  # [x, y, z]: negative x = in front, z = above
+    cam_offset = CAM_OFFSET
     cam_distance, cam_azimuth, cam_elevation = offset_to_spherical(cam_offset)
     
     # Store initial pose for reset

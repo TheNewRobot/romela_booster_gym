@@ -1,26 +1,9 @@
 import os
-import glob
 import yaml
 import argparse
 import torch
-from policies.actor_critic import *
-
-
-def find_experiment_config(checkpoint_path):
-    """Auto-detect config.yaml from checkpoint's experiment folder."""
-    checkpoint_dir = os.path.dirname(os.path.abspath(checkpoint_path))
-    
-    # If checkpoint is in nn/ subfolder, go up one level
-    if os.path.basename(checkpoint_dir) == "nn":
-        experiment_dir = os.path.dirname(checkpoint_dir)
-    else:
-        experiment_dir = checkpoint_dir
-    
-    config_path = os.path.join(experiment_dir, "config.yaml")
-    if os.path.exists(config_path):
-        return config_path
-    return None
-
+from policies.actor_critic import ActorCritic
+from utils.config_loader import find_experiment_config, load_config
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -43,10 +26,7 @@ if __name__ == "__main__":
             print(f"Fallback to task config: {cfg_file}")
         else:
             raise ValueError("Could not find config. Provide --config or --task, or ensure config.yaml exists in experiment folder.")
-
-    with open(cfg_file, "r", encoding="utf-8") as f:
-        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
-
+    cfg = load_config(cfg_file)
     model = ActorCritic(cfg["env"]["num_actions"], cfg["env"]["num_observations"], cfg["env"]["num_privileged_obs"])
     cfg["basic"]["checkpoint"] = args.checkpoint
 
@@ -59,10 +39,15 @@ if __name__ == "__main__":
     
     # Save to models/exported/{task}/{checkpoint_name}.pt
     task_name = cfg["basic"]["task"]
-    checkpoint_name = os.path.splitext(os.path.basename(cfg["basic"]["checkpoint"]))[0]
+    checkpoint_path = os.path.abspath(cfg["basic"]["checkpoint"])
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    if os.path.basename(checkpoint_dir) == "nn":
+        experiment_name = os.path.basename(os.path.dirname(checkpoint_dir))
+    else:
+        experiment_name = os.path.basename(checkpoint_dir)
     export_dir = os.path.join("deploy", "models", task_name)
     os.makedirs(export_dir, exist_ok=True)
-    save_path = os.path.join(export_dir, f"{checkpoint_name}.pt")
+    save_path = os.path.join(export_dir, f"{experiment_name}.pt")
     
     script_module.save(save_path)
     print(f"Saved model to {save_path}")

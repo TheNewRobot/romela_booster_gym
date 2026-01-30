@@ -141,6 +141,9 @@ class BaseTask:
                     print(f"{'Playing' if self.is_playing else 'Paused'}")
                 elif evt.action == "reset" and evt.value > 0:
                     self.reset_triggered = True
+                    self.cmd_vx = 0.0
+                    self.cmd_vy = 0.0
+                    self.cmd_vyaw = 0.0
                 elif evt.value > 0:
                     self._handle_velocity_event(evt.action)
 
@@ -197,5 +200,4 @@ class BaseTask:
             self.cmd_vyaw = min(self.cmd_vyaw + 0.1, 1.0)
         elif action == "vyaw_down":
             self.cmd_vyaw = max(self.cmd_vyaw - 0.1, -1.0)
-        if (self.cmd_vx, self.cmd_vy, self.cmd_vyaw) != (old_vx, old_vy, old_vyaw):
-            print(f"Velocity: vx={self.cmd_vx:.1f}, vy={self.cmd_vy:.1f}, vyaw={self.cmd_vyaw:.1f}")
+        pass

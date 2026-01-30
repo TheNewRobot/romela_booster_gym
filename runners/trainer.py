@@ -15,7 +15,6 @@ from utils.helpers import discount_values, surrogate_loss
 from runners.recorder import Recorder
 from envs import *
 
-
 class Runner:
 
     def __init__(self, test=False):
@@ -298,48 +297,3 @@ class Runner:
             print(f"{'Iteration time:':<{pad}} {self._format_time(iteration_time)}")
             print(f"{'Total time:':<{pad}} {self._format_time(total_time)}")
             print(f"{'ETA:':<{pad}} {self._format_time(eta)}")
-
-    def play(self):
-        obs, infos = self.env.reset()
-        self.env.gym.simulate(self.env.sim)
-        self.env.gym.fetch_results(self.env.sim, True)
-        self.env.render()
-        obs = obs.to(self.device)
-        if self.cfg["viewer"]["record_video"]:
-            video_dir = os.path.join("videos", self.args.task)
-            os.makedirs(video_dir, exist_ok=True)
-            name = time.strftime("%Y-%m-%d-%H-%M-%S.mp4", time.localtime())
-            record_time = self.cfg["viewer"]["record_interval"]
-        print("\n=== Interactive Play Mode ===")
-        print("Controls: [space] play/pause | [w/s] vx | [a/d] vy | [q/e] vyaw | [r] reset")
-        print("Press [space] to start\n")
-        while True:
-            self.env.render()
-            if self.env.reset_triggered:
-                obs, infos = self.env.reset()
-                obs = obs.to(self.device)
-                self.env.reset_triggered = False
-                print("Episode reset")
-            if not self.env.is_playing:
-                continue
-            with torch.no_grad():
-                dist = self.model.act(obs)
-                act = dist.loc
-                obs, rew, done, infos = self.env.step(act)
-                obs, rew, done = obs.to(self.device), rew.to(self.device), done.to(self.device)
-            if self.cfg["viewer"]["record_video"]:
-                record_time -= self.env.dt
-                if record_time < 0:
-                    record_time += self.cfg["viewer"]["record_interval"]
-                    self.interrupt = False
-                    signal.signal(signal.SIGINT, self.interrupt_handler)
-                    with imageio.get_writer(os.path.join(video_dir, name), fps=int(1.0 / self.env.dt)) as self.writer:
-                        for frame in self.env.camera_frames:
-                            self.writer.append_data(frame)
-                    if self.interrupt:
-                        raise KeyboardInterrupt
-                    signal.signal(signal.SIGINT, signal.default_int_handler)
-
-    def interrupt_handler(self, signal, frame):
-        print("\nInterrupt received, waiting for video to finish...")
-        self.interrupt = True

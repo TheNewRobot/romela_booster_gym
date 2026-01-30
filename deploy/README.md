@@ -19,7 +19,7 @@ Follow these steps to set up your environment:
 
 Convert trained `.pth` checkpoint to JIT format for deployment:
 ```bash
-python scripts/export_model.py --checkpoint=logs/T1//nn/model_XXXX.pth
+python scripts/export_model.py --checkpoint=logs/T1/<experiment_name>/nn/model_XXXX.pth
 ```
 
 Output: `deploy/models/T1/model_XXXX.pt`
