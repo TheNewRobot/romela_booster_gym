@@ -1,19 +1,40 @@
-# ROS topic mapping for rosbag extraction
-# Update these with actual T1 topic names
+# ROS topic mapping for Booster T1 rosbag extraction
+# Actual topic names from booster_hardware_bridge
 
-joint_states:
-  topic: /joint_states
-  msg_type: sensor_msgs/JointState
+sensor_data:
+  topic: /booster/sensor_data
+  msg_type: booster_msgs/msg/BoosterSensorData
+  rate_hz: 500
+  fields:
+    imu_rpy: [3]           # roll, pitch, yaw (rad)
+    imu_gyro: [3]          # angular velocity (rad/s)
+    imu_acc: [3]           # linear acceleration (m/s^2)
+    joint_positions: [23]  # all joints (rad)
+    joint_velocities: [23] # all joints (rad/s)
+    joint_torques: [23]    # estimated torques (Nm)
 
-imu:
-  topic: /imu/data
-  msg_type: sensor_msgs/Imu
+motor_cmd:
+  topic: /booster/motor_cmd
+  msg_type: booster_msgs/msg/BoosterMotorCmd
+  rate_hz: 500
+  fields:
+    joint_positions: [23]
+    joint_velocities: [23]
+    joint_torques: [23]
+    joint_kp: [23]
+    joint_kd: [23]
 
-odom:
-  topic: /odom
-  msg_type: nav_msgs/Odometry
+control_cmd:
+  topic: /booster/control_cmd
+  msg_type: booster_msgs/msg/BoosterControlCmd
+  rate_hz: 50
+  fields:
+    vx: float    # forward velocity (m/s)
+    vy: float    # lateral velocity (m/s)
+    vyaw: float  # yaw velocity (rad/s)
 
-cmd_vel:
-  topic: /cmd_vel
-  msg_type: geometry_msgs/Twist
-  
+# Joint index reference:
+# 0-10: Upper body (head, arms)
+# 11-22: Legs (locomotion policy)
+#   11-16: Left leg
+#   17-22: Right leg
