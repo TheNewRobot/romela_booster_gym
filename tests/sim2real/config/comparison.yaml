@@ -1,0 +1,57 @@
+# Metrics and plotting configuration for sim2real comparison
+
+metrics:
+  joint_position_rmse:
+    description: "RMSE between real and sim joint positions"
+    unit: "rad"
+    joints: "legs"  # legs, arms, or all
+
+  joint_velocity_rmse:
+    description: "RMSE between real and sim joint velocities"
+    unit: "rad/s"
+    joints: "legs"
+
+  base_orientation_drift:
+    description: "Cumulative orientation error over time"
+    unit: "rad"
+    components: [roll, pitch, yaw]
+
+  base_velocity_tracking:
+    description: "Error between commanded and actual base velocity"
+    unit: "m/s"
+    components: [vx, vy, vyaw]
+
+plots:
+  joint_trajectories:
+    description: "Overlay real vs sim joint positions"
+    type: "timeseries"
+    subplots_per_row: 3
+    figsize: [14, 10]
+
+  base_orientation:
+    description: "Roll, pitch, yaw over time"
+    type: "timeseries"
+    subplots_per_row: 3
+    figsize: [14, 4]
+
+  velocity_tracking:
+    description: "Commanded vs actual base velocity"
+    type: "timeseries"
+    subplots_per_row: 3
+    figsize: [14, 4]
+
+  phase_portrait:
+    description: "Joint angle vs joint velocity"
+    type: "phase"
+    joints: [11, 17]  # left hip pitch, right hip pitch
+    figsize: [10, 5]
+
+  error_histogram:
+    description: "Distribution of tracking errors"
+    type: "histogram"
+    bins: 50
+    figsize: [10, 6]
+
+output:
+  format: "png"
+  dpi: 150

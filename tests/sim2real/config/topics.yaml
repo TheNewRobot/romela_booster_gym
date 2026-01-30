@@ -1,0 +1,19 @@
+# ROS topic mapping for rosbag extraction
+# Update these with actual T1 topic names
+
+joint_states:
+  topic: /joint_states
+  msg_type: sensor_msgs/JointState
+
+imu:
+  topic: /imu/data
+  msg_type: sensor_msgs/Imu
+
+odom:
+  topic: /odom
+  msg_type: nav_msgs/Odometry
+
+cmd_vel:
+  topic: /cmd_vel
+  msg_type: geometry_msgs/Twist
+  
