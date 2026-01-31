@@ -17,6 +17,9 @@ python tests/policies_arena/evaluate.py --task=T1 --headless=false
 
 # Use custom config
 python tests/policies_arena/evaluate.py --task=T1 --config=path/to/custom_config.yaml
+
+# Plot the results (change the experiment date and then run)
+python tests/policies_arena/plot_results.py --task=T1 
 ```
 
 ## Configuration

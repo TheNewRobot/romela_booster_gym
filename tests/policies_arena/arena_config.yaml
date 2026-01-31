@@ -13,8 +13,8 @@
 policies:
   - name: "baseline"
     checkpoint: "logs/T1/2026-01-28-11-49-20_t1_locomotion_policy_height_0_68/nn/model_10000.pth"
-  - name: "training"
-    checkpoint: "logs/T1/2026-01-28-11-49-20_t1_locomotion_policy_height_0_68/nn/model_1000.pth"
+  - name: "bug_fixed"
+    checkpoint: "logs/T1/2026-01-30-15-58-42_t1_locomotion_policy_height_fixed_reset/nn/model_10000.pth"
   # - name: "experimental"
   #   checkpoint: "logs/T1/2026-01-28-10-00-00/nn/model_3000.pth"
 
