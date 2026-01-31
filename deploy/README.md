@@ -35,7 +35,7 @@ Same controls as `play.py` (WASD, QE, Space, O, R).
 
 ### MuJoCo (play_mujoco.py)
 ```bash
-python scripts/play_mujoco.py --policy=deploy/models/T1/model_XXXX.pt --task=T1
+python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt 
 ```
 
 #### Keyboard Controls
