@@ -26,13 +26,6 @@ Output: `deploy/models/T1/model_XXXX.pt`
 
 ## Testing Policies
 
-### Isaac Gym (play_jit.py)
-```bash
-python scripts/play_jit.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt
-```
-
-Same controls as `play.py` (WASD, QE, Space, O, R).
-
 ### MuJoCo (play_mujoco.py)
 ```bash
 python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt 

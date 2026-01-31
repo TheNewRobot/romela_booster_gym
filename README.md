@@ -190,13 +190,13 @@ You can disable W&B by setting `use_wandb` to `false` in the config file.
 
 ---
 
-### 2. Playing
+### 1. Playing
 
 #### In-Simulation Testing
 
 To test the trained policy in Isaac Gym with a single robot (recommended for visualization):
 ```sh
-python scripts/play.py --task=T1 --checkpoint=-1 --num_envs=1 --terrain=plane
+python scripts/play.py --task=T1 --num_envs=1 --policy=logs/T1/<experiment>/nn/<model>.pth
 ```
 
 > **Note:** Use `--num_envs=1` when visualizing. Use `--terrain=plane` for flat ground (default is `trimesh` from config).
@@ -232,7 +232,7 @@ To disable velocity printing, set `verbose=False` in `GamepadController` init (s
 To test the policy in MuJoCo (sim-to-sim transfer validation)
 
 ```sh
-python scripts/play_mujoco.py --task=T1 --checkpoint=-1
+python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/<experiment>.pt
 ```
 
 ---
