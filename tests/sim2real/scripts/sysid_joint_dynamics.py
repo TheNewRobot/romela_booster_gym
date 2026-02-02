@@ -257,14 +257,25 @@ class SysIDController:
         self.logger.info("\nTest sequence complete!")
 
     def save_data(self, output_dir):
-        """Save recorded data to CSV"""
-        os.makedirs(output_dir, exist_ok=True)
+        """Save recorded data to CSV with metadata header"""
+        # Get experiment name from config
+        experiment_name = self.sysid_cfg.get("experiment", {}).get("name", "unnamed")
+        
+        # Create experiment subfolder
+        experiment_dir = os.path.join(output_dir, experiment_name)
+        os.makedirs(experiment_dir, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"joint_{self.test_joint}_{self.joint_name}_{timestamp}.csv"
-        filepath = os.path.join(output_dir, filename)
+        filepath = os.path.join(experiment_dir, filename)
         
         with open(filepath, "w", newline="") as f:
+            # Write metadata header
+            f.write(f"# experiment: {experiment_name}\n")
+            f.write(f"# joint_index: {self.test_joint}\n")
+            f.write(f"# joint_name: {self.joint_name}\n")
+            
+            # Write data
             writer = csv.DictWriter(f, fieldnames=[
                 "timestamp", "test_type", "test_param",
                 "cmd_position", "actual_position", "actual_velocity", "actual_torque"

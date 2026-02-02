@@ -1,31 +1,24 @@
 # System Identification Test Configuration
 # Conservative parameters for initial testing
 
+experiment:
+  name: hanging_test_01
+
 test:
   # Joint to test (11 = Left Hip Pitch, safest starting point)
-  joint: 11
+  joint: 22
   
+  # Step response tests
   step:
-    amplitudes: [0.05]  # Just one tiny step (~3 degrees)
-    duration: 1.0       # 1 second only
-    settle_time: 1.0
-
-  # # Step response tests
-  # step:
-  #   amplitudes: [0.05, -0.05, 0.1, -0.1]  # radians from neutral
-  #   duration: 2.0      # seconds per step
-  #   settle_time: 1.0   # seconds to return to neutral between tests
-
-  sine:
-    amplitude: 0.05
-    frequencies: []     # Skip sine tests entirely
-    duration: 4.0
+    amplitudes: [0.05, -0.05, 0.1, -0.1]  # radians from neutral
+    duration: 2.0      # seconds per step
+    settle_time: 1.0   # seconds to return to neutral between tests
   
-  # # Sinusoid sweep tests  
-  # sine:
-  #   amplitude: 0.05    # radians
-  #   frequencies: [0.5, 1.0, 2.0]  # Hz
-  #   duration: 4.0      # seconds per frequency
+  # Sinusoid sweep tests  
+  sine:
+    amplitude: 0.05    # radians
+    frequencies: [0.5, 1.0, 2.0]  # Hz
+    duration: 4.0      # seconds per frequency
 
   # Recording
   record_rate: 500  # Hz (match SDK rate)
