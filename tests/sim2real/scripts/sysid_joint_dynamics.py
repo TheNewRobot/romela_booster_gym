@@ -41,8 +41,8 @@ from booster_robotics_sdk_python import (
     MotorCmd,
 )
 
-from utils.remote_control_service import RemoteControlService
-from utils.timer import TimerConfig, Timer
+from deploy.utils.remote_control_service import RemoteControlService
+from deploy.utils.timer import TimerConfig, Timer
 
 
 class SysIDController:
@@ -335,7 +335,7 @@ def main():
                         help="SysID test config file")
     parser.add_argument("--joint", type=int, default=None, help="Joint index to test (overrides config)")
     parser.add_argument("--output", type=str, default="tests/sim2real/data", help="Output directory for CSV")
-    parser.add_argument("--net", type=str, default="127.0.0.1", help="Network interface for SDK")
+    parser.add_argument("--net", type=str, default="192.168.10.102", help="Network interface for SDK")
     args = parser.parse_args()
 
     # Resolve config path
