@@ -34,7 +34,7 @@ common:
   ]
 
 policy:
-  policy_path: "./models/T1.pt"
+  policy_path: "./models/T1/2026-01-30-15-58-42_t1_locomotion_policy_height_fixed_reset.pt"
   num_actions: 12
   num_observations: 47
   gait_frequency: 1

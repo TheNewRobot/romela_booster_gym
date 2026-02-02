@@ -1,0 +1,62 @@
+# System Identification Test Configuration
+# Conservative parameters for initial testing
+
+test:
+  # Joint to test (11 = Left Hip Pitch, safest starting point)
+  joint: 11
+  
+  step:
+    amplitudes: [0.05]  # Just one tiny step (~3 degrees)
+    duration: 1.0       # 1 second only
+    settle_time: 1.0
+
+  # # Step response tests
+  # step:
+  #   amplitudes: [0.05, -0.05, 0.1, -0.1]  # radians from neutral
+  #   duration: 2.0      # seconds per step
+  #   settle_time: 1.0   # seconds to return to neutral between tests
+
+  sine:
+    amplitude: 0.05
+    frequencies: []     # Skip sine tests entirely
+    duration: 4.0
+  
+  # # Sinusoid sweep tests  
+  # sine:
+  #   amplitude: 0.05    # radians
+  #   frequencies: [0.5, 1.0, 2.0]  # Hz
+  #   duration: 4.0      # seconds per frequency
+
+  # Recording
+  record_rate: 500  # Hz (match SDK rate)
+
+# Gains for tested joint (uses common gains from T1.yaml)
+active_joint:
+  use_common_gains: true  # if false, use values below
+  kp: 200.0
+  kd: 5.0
+
+# Gains for passive joints (hang loose)
+passive_joints:
+  kp: 0.0
+  kd: 2.0
+
+# Safety limits
+safety:
+  max_joint_velocity: 5.0  # rad/s - trigger warning
+  max_amplitude: 0.3       # rad - hard limit on commanded amplitude
+
+# Joint name reference (for logging)
+joint_names:
+  11: "Left_Hip_Pitch"
+  12: "Left_Hip_Roll"
+  13: "Left_Hip_Yaw"
+  14: "Left_Knee_Pitch"
+  15: "Left_Ankle_Pitch"
+  16: "Left_Ankle_Roll"
+  17: "Right_Hip_Pitch"
+  18: "Right_Hip_Roll"
+  19: "Right_Hip_Yaw"
+  20: "Right_Knee_Pitch"
+  21: "Right_Ankle_Pitch"
+  22: "Right_Ankle_Roll"
