@@ -167,8 +167,8 @@ def main():
         return
     
     # Create plots directory
-    plots_dir = data_dir / 'plots'
-    plots_dir.mkdir(exist_ok=True)
+    plots_dir = data_dir / 'plots' / 'raw'
+    plots_dir.mkdir(parents=True, exist_ok=True)
     
     # Find all joint CSV files
     csv_pattern = str(data_dir / 'joint_*.csv')

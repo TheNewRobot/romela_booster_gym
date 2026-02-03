@@ -120,6 +120,13 @@ def simulate_joint_response(
     data = mujoco.MjData(mj_model)
     mujoco.mj_resetData(mj_model, data)
     
+    # Fix base in hanging position (robot suspended in air)
+    base_pos = np.array([0.0, 0.0, 1.0])  # 1m above ground
+    base_quat = np.array([1.0, 0.0, 0.0, 0.0])  # upright (w,x,y,z)
+    data.qpos[0:3] = base_pos
+    data.qpos[3:7] = base_quat
+    data.qvel[0:6] = 0.0  # no base velocity
+    
     # Set initial position (use qpos_idx)
     if initial_pos is not None:
         data.qpos[qpos_idx] = initial_pos
@@ -143,6 +150,11 @@ def simulate_joint_response(
         
         # Step
         mujoco.mj_step(mj_model, data)
+        
+        # Keep base fixed (simulate hanging robot)
+        data.qpos[0:3] = base_pos
+        data.qpos[3:7] = base_quat
+        data.qvel[0:6] = 0.0
         
         # Record
         sim_positions[i] = data.qpos[qpos_idx]

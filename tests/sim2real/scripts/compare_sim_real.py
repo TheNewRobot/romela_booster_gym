@@ -166,8 +166,8 @@ def main():
     args = parser.parse_args()
     
     exp_dir = Path('tests/sim2real/data') / args.experiment
-    plots_dir = exp_dir / 'plots'
-    plots_dir.mkdir(exist_ok=True)
+    plots_dir = exp_dir / 'plots' / 'comparison'
+    plots_dir.mkdir(parents=True, exist_ok=True)
     
     # Validate
     for p in [exp_dir, args.robot_config, args.mujoco_xml, args.sim_params]:
