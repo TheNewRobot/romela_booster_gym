@@ -3,3 +3,12 @@ wandb
 imageio[ffmpeg]
 mujoco
 inputs
+scipy
+pandas
+matplotlib
+# JAX - for differentiable sim2real optimization
+# Install with: pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# Or for CPU-only: pip install jax
+jax
+jaxlib
+mujoco>=3.0

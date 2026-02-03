@@ -1,47 +1,84 @@
-# Tunable simulation parameters for Isaac Gym and MuJoCo
-# Adjust these to reduce sim-to-real gap
-
 isaac:
   contact:
     friction: 1.0
     restitution: 0.0
     rolling_friction: 0.0
     torsion_friction: 0.0
-
   joint:
     damping: 0.5
     friction: 0.0
     armature: 0.0
-
   actuator:
     stiffness: 40.0
     damping: 4.0
-
   solver:
     position_iterations: 4
     velocity_iterations: 1
     contact_offset: 0.02
     rest_offset: 0.0
-
   dynamics:
-    base_com_offset: [0.0, 0.0, 0.0]  # x, y, z offset in meters
-
+    base_com_offset:
+    - 0.0
+    - 0.0
+    - 0.0
 mujoco:
   contact:
-    solref: [-1000, -100]             # timeconst, dampratio (negative = direct stiffness/damping)
-    solimp: [0.9, 0.95, 0.001]        # dmin, dmax, width
-    friction: [1.0, 0.005, 0.0001]    # sliding, torsional, rolling
-
+    solref:
+    - -1000
+    - -100
+    solimp:
+    - 0.9
+    - 0.95
+    - 0.001
+    friction:
+    - 1.0
+    - 0.005
+    - 0.0001
   joint:
-    damping: 0.5
-    frictionloss: 0.0
-    armature: 0.0
-
+    damping:
+      11: 0.500033
+      12: 0.499842
+      13: 0.705191
+      14: 0.50025
+      17: 0.499942
+      18: 0.498368
+      19: 0.49989
+      20: 0.501008
+    frictionloss:
+      11: 0.01
+      12: 0.009986
+      13: 0.01
+      14: 0.01
+      17: 0.01
+      18: 0.009976
+      19: 0.01
+      20: 0.01
+    armature:
+      11: 0.009999
+      12: 0.009995
+      13: 0.005417
+      14: 0.009995
+      17: 0.01
+      18: 0.009953
+      19: 0.009996
+      20: 0.009992
+    _optimization_info:
+      timestamp: '2026-02-02T23:56:24.384631'
+      joints_optimized:
+      - 11
+      - 12
+      - 13
+      - 14
+      - 17
+      - 18
+      - 19
+      - 20
   actuator:
-    forcerange: [-100, 100]
+    forcerange:
+    - -100
+    - 100
     gear: 1.0
-
   option:
     timestep: 0.002
     iterations: 50
-    solver: "Newton"
+    solver: Newton

@@ -77,6 +77,15 @@ class SysIDController:
         # Get neutral position for test joint
         self.neutral_pos = self.robot_cfg["common"]["default_qpos"][self.test_joint]
         
+        # Build parallel mechanism pair mapping from config
+        # Modify mech.parallel_mech_indexes in robot config if hardware changes
+        self.parallel_pairs = {}
+        parallel_indexes = self.robot_cfg.get("mech", {}).get("parallel_mech_indexes", [])
+        for i in range(0, len(parallel_indexes) - 1, 2):
+            j1, j2 = parallel_indexes[i], parallel_indexes[i + 1]
+            self.parallel_pairs[j1] = j2
+            self.parallel_pairs[j2] = j1
+        
         self.logger.info(f"SysID Controller initialized for {self.joint_name} (index {self.test_joint})")
         self.logger.info(f"Neutral position: {self.neutral_pos:.4f} rad")
 
@@ -134,14 +143,26 @@ class SysIDController:
             self.low_cmd.motor_cmd[i].weight = 0.0
 
     def _setup_joint_gains(self):
-        """Set gains: active joint uses common gains, others hang loose"""
+        """Set gains: active joint uses common gains, others hang loose.
+        
+        For parallel mechanism joints (ankles), both paired motors are activated
+        to enable proper Jacobian-based series-parallel conversion in the SDK.
+        """
         self._init_low_cmd()
         
         passive_kp = self.sysid_cfg["passive_joints"]["kp"]
         passive_kd = self.sysid_cfg["passive_joints"]["kd"]
         
+        # Determine which joints need active gains
+        active_joints = {self.test_joint}
+        paired_joint = self.parallel_pairs.get(self.test_joint)
+        if paired_joint is not None:
+            active_joints.add(paired_joint)
+            paired_name = self.sysid_cfg["joint_names"].get(paired_joint, f"Joint_{paired_joint}")
+            self.logger.info(f"Parallel mechanism: also activating {paired_name} (index {paired_joint})")
+        
         for i in range(B1JointCnt):
-            if i == self.test_joint:
+            if i in active_joints:
                 # Active joint: use common gains
                 if self.sysid_cfg["active_joint"]["use_common_gains"]:
                     self.low_cmd.motor_cmd[i].kp = self.robot_cfg["common"]["stiffness"][i]
