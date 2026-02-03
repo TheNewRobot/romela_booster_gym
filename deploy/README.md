@@ -1,48 +1,37 @@
 # Deploy on Booster Robot
 
+Deploy trained policies to the Booster T1 robot via the Booster Robotics SDK.
+
 ## Installation
 
-Follow these steps to set up your environment:
-
 1. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-    ```sh
-    $ pip install -r requirements.txt
-    ```
-
-2. Install Booster Robotic SDK:
-
-    Refer to the [Booster Robotics SDK Guide](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-WDzedC8AiovU8gxSjeGcQ5CInSf) and ensure you complete the section on [Compile Sample Programs and Install Python SDK](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-EI5fdtSucoJWO4xd49QcE5JxnCf).
-
+2. Install Booster Robotics SDK following the [official guide](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-WDzedC8AiovU8gxSjeGcQ5CInSf).
 
 ## Export Model
 
-Convert trained `.pth` checkpoint to JIT format for deployment:
+Convert trained checkpoint to JIT format:
+
 ```bash
-python scripts/export_model.py --checkpoint=logs/T1/<experiment_name>/nn/model_XXXX.pth
+python scripts/export_model.py --checkpoint=logs/T1/<experiment>/nn/model_XXXX.pth
 ```
 
 Output: `deploy/models/T1/model_XXXX.pt`
 
-## Testing Policies
+## Test in MuJoCo (Recommended First)
 
-### MuJoCo (play_mujoco.py)
+Before deploying to real hardware, validate in MuJoCo:
+
 ```bash
-python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt 
+python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt
 ```
 
-#### Keyboard Controls
+See [README_main.md](README_main.md#controls) for keyboard and gamepad controls.
 
-| Key | Action |
-|-----|--------|
-| **↑ / ↓** | Forward / Backward |
-| **← / →** | Strafe Left / Right |
-| **Q / E** | Turn Left / Right |
-| **Space** | Pause / Unpause |
-| **R** | Reset pose |
-| **O** | Toggle camera follow |
-
-#### MuJoCo Viewer Tips
+### MuJoCo Viewer Tips
 
 | Key | Action |
 |-----|--------|
@@ -53,28 +42,44 @@ python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/model_XXXX.pt
 
 To show world axes: **Tab** → Rendering → Frame → World
 
-## Sim2Real Data Collection
+## Deploy to Robot
 
-For recording real robot data and comparing with simulation, see the [romela_booster_data](https://github.com/TheNewRobot/romela_booster_data) repository.
+### Safety Controls
 
+| Control | Action |
+|---------|--------|
+| **RT + Y** | PREP mode (safe idle) |
+| **LT + BACK** | Damping mode (soft stop) |
+| **E-Stop** | Physical button on back of robot |
 
-## Usage
+**Always know where the e-stop is before running policies.**
 
-1. Prepare the robot:
+### Deployment Steps
 
-    - **Simulation:** Set up the simulation by referring to [Development Based on Webots Simulation](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-IsE9d2DrIow8tpxCBUUcogdwn5d) or [Development Based on Isaac Simulation Link](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-Jczjd4UKMou7QlxjvJ4c9NNfnwb).
+1. **Prepare the robot:**
+   - **Simulation:** Follow [Webots setup](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-IsE9d2DrIow8tpxCBUUcogdwn5d) or [Isaac setup](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-Jczjd4UKMou7QlxjvJ4c9NNfnwb)
+   - **Real robot:** Power on, switch to PREP mode (RT + Y), place on stable ground
 
-    - **Real World:** Power on the robot and switch it to PREP Mode. Place the robot to a stable standing position on the ground.
+2. **Run deployment:**
+   ```bash
+   cd deploy
+   python deploy.py --config=T1.yaml
+   ```
 
-2. Run the deployment script:
+   Options:
+   - `--config` — Config file in `configs/` folder
+   - `--net` — Network interface (default: `127.0.0.1`, use robot IP for real hardware), we have been using --net=192.168.10.102 when deployed from tegra
 
-    ```sh
-    $ python deploy.py --config=T1.yaml
-    ```
+3. **Exit safely:**
+   - Switch to PREP mode (RT + Y) before terminating the script
+   - Never kill the script while robot is in motion
 
-    - `--config`: Name of the configuration file, located in the `configs/` folder.
-    - `--net`: Network interface for SDK communication. Default is `127.0.0.1`.
+## Configuration
 
-3. Exit Safely:
+Deployment config: `deploy/configs/T1.yaml`
 
-    Switch back to PREP Mode before terminating the program to safely release control.
+Key parameters:
+- Policy path and observation/action specs
+- PD gains (kp, kd)
+- Joint limits and safety bounds
+- Default pose
