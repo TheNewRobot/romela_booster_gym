@@ -721,7 +721,7 @@ def main():
     parser.add_argument(
         '--config', 
         type=str, 
-        default='tests/policies_arena/arena_config.yaml',
+        default='tests/policies_arena/config/arena_config.yaml',
         help='Path to arena configuration file'
     )
     parser.add_argument(

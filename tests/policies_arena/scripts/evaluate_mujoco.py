@@ -14,7 +14,7 @@ import torch
 import mujoco
 
 sys.path.insert(0, os.getcwd())
-from tests.policies_arena.arena_utils import (
+from tests.policies_arena.utils.arena_utils import (
     load_yaml, set_seed, parse_arena_config, get_stage_commands,
     check_survival, compute_tracking_error, check_stage_pass,
     create_output_dir, save_results_csv, print_stage_result,
@@ -424,7 +424,7 @@ class MuJoCoArenaEvaluator:
 def main():
     parser = argparse.ArgumentParser(description='MuJoCo Policy Arena Evaluation')
     parser.add_argument('--task', type=str, default='T1', help='Task name')
-    parser.add_argument('--config', type=str, default='tests/policies_arena/arena_config.yaml',
+    parser.add_argument('--config', type=str, default='tests/policies_arena/config/arena_config.yaml',
                         help='Path to arena configuration file')
     parser.add_argument('--headless', type=str, default=None, choices=['true', 'false'],
                         help='Override headless setting')
