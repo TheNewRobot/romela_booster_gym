@@ -76,6 +76,22 @@ Logs saved to `logs/T1/<timestamp>/`. Track progress with TensorBoard:
 tensorboard --logdir logs
 ```
 
+### Training with Calibrated Physics
+
+To train policies with sysID-calibrated joint dynamics in Isaac Gym:
+
+1. Update `tests/sim2real/config/sim_params.yaml` isaac section with calibrated values
+2. Add to `envs/locomotion/T1.yaml`:
+```yaml
+sim_params:
+  use_calibrated: true
+  path: "tests/sim2real/config/sim_params.yaml"
+```
+3. Train: `python scripts/train.py --task=T1`
+
+The calibrated damping, friction, and armature values will be applied to all joints.
+
+
 ### Resume Training
 ```bash
 python scripts/train.py --task=T1 --checkpoint=-1                    # Latest checkpoint

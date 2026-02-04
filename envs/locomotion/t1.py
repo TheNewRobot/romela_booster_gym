@@ -17,6 +17,7 @@ import torch
 
 import numpy as np
 from envs.base_task import BaseTask
+import yaml
 
 from utils.helpers import apply_randomization
 
@@ -57,6 +58,15 @@ class T1(BaseTask):
         self.dof_names = self.gym.get_asset_dof_names(robot_asset)
 
         dof_props_asset = self.gym.get_asset_dof_properties(robot_asset)
+        
+        if self.cfg.get("sim_params", {}).get("use_calibrated", False):
+            with open(self.cfg["sim_params"]["path"]) as f:
+                p = yaml.safe_load(f).get("isaac", {}).get("joint", {})
+            dof_props_asset['damping'][:] = p.get("damping", 0.0)
+            dof_props_asset['friction'][:] = p.get("friction", 0.0)
+            dof_props_asset['armature'][:] = p.get("armature", 0.0)
+            print(f"[SimParams] damping={p.get('damping')}, friction={p.get('friction')}, armature={p.get('armature')}")
+        
         self.dof_pos_limits = torch.zeros(self.num_dofs, 2, dtype=torch.float, device=self.device)
         self.dof_vel_limits = torch.zeros(self.num_dofs, dtype=torch.float, device=self.device)
         self.torque_limits = torch.zeros(self.num_dofs, dtype=torch.float, device=self.device)

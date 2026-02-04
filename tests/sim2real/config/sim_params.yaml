@@ -6,8 +6,8 @@ isaac:
     torsion_friction: 0.0
   joint:
     damping: 0.5
-    friction: 0.0
-    armature: 0.0
+    friction: 0.01
+    armature: 0.01
   actuator:
     stiffness: 40.0
     damping: 4.0
