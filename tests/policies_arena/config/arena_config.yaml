@@ -11,10 +11,13 @@
 # Add as many policies as you want to compare.
 # Each policy needs a unique name and path to checkpoint.
 policies:
-  # - name: "baseline"
-  #   checkpoint: "logs/T1/2026-01-28-11-49-20_t1_locomotion_policy_height_0_68/nn/model_10000.pth"
+  - name: "baseline"
+    checkpoint: "logs/T1/2026-01-28-11-49-20_t1_locomotion_policy_height_0_68/nn/model_10000.pth"
+  - name: "sys_ID"
+    checkpoint: "logs/T1/2026-02-04-00-13-44_t1_locomotion_policy_height_sysID_values/nn/model_10000.pth"
   - name: "bug_fixed"
     checkpoint: "logs/T1/2026-01-30-15-58-42_t1_locomotion_policy_height_fixed_reset/nn/model_10000.pth"
+  
   # - name: "experimental"
   #   checkpoint: "logs/T1/2026-01-28-10-00-00/nn/model_3000.pth"
 
@@ -54,21 +57,27 @@ terrains:
   slope_a:
     type: "trimesh"
     slope: 0.087              # ~5 degrees (tan(5°))
+    tracking_mode: "full"
     proportions: [0.0, 1.0, 0.0, 0.0]
+    
   
   slope_b:
     type: "trimesh"
     slope: 0.176              # ~10 degrees (tan(10°))
+    tracking_mode: "full"
     proportions: [0.0, 1.0, 0.0, 0.0]
+    
   
   rough_a:
     type: "trimesh"
     random_height: 0.02       # 2cm roughness
+    tracking_mode: "full"
     proportions: [0.0, 0.0, 1.0, 0.0]
   
   rough_b:
     type: "trimesh"
     random_height: 0.05       # 5cm roughness
+    tracking_mode: "commanded" # full or commanded-only tracking error
     proportions: [0.0, 0.0, 1.0, 0.0]
 
 # ------------------------------------------------------------
@@ -83,72 +92,72 @@ terrains:
 # Policies progress through stages in order.
 # A policy is eliminated when it fails a stage.
 stages:
-  # - name: "Stand Still"
+  - name: "Stand Still"
+    terrain: "flat"
+    vx: 0.0
+    vy: 0.0
+    vyaw: 0.0
+    tracking_threshold: null  # Survival only, no tracking check
+
+  # - name: "Forward Slow"
+  #   terrain: "flat"
+  #   vx: 0.5
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.11
+
+  # - name: "Forward Fast"
+  #   terrain: "flat"
+  #   vx: 0.8
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.11
+
+  # - name: "Lateral"
+  #   terrain: "flat"
+  #   vx: 0.0
+  #   vy: 0.5
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.11
+
+  # - name: "Rotation"
   #   terrain: "flat"
   #   vx: 0.0
   #   vy: 0.0
-  #   vyaw: 0.0
-  #   tracking_threshold: null  # Survival only, no tracking check
-
-  - name: "Forward Slow"
-    terrain: "flat"
-    vx: 0.5
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: 0.11
-
-  - name: "Forward Fast"
-    terrain: "flat"
-    vx: 0.8
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: 0.11
-
-  - name: "Lateral"
-    terrain: "flat"
-    vx: 0.0
-    vy: 0.5
-    vyaw: 0.0
-    tracking_threshold: 0.11
-
-  - name: "Rotation"
-    terrain: "flat"
-    vx: 0.0
-    vy: 0.0
-    vyaw: 0.7
-    tracking_threshold: 0.11
+  #   vyaw: 0.7
+  #   tracking_threshold: 0.11
 
   # - name: "Combined"
   #   terrain: "flat"
   #   vx: 0.5
   #   vy: 0.3
   #   vyaw: 0.0
-  #   tracking_threshold: 0.15
+  #   tracking_threshold: 0.11
 
   # - name: "Slope Easy"
   #   terrain: "slope_a"
   #   vx: 0.5
   #   vy: 0.0
   #   vyaw: 0.0
-  #   tracking_threshold: 0.15
+  #   tracking_threshold: 0.13
 
   # - name: "Slope Hard"
   #   terrain: "slope_b"
   #   vx: 0.5
   #   vy: 0.0
   #   vyaw: 0.0
-  #   tracking_threshold: 0.15
+  #   tracking_threshold: 0.13
 
   # - name: "Rough Easy"
   #   terrain: "rough_a"
   #   vx: 0.5
   #   vy: 0.0
   #   vyaw: 0.0
-  #   tracking_threshold: 0.15
+  #   tracking_threshold: 0.13
 
   # - name: "Rough Hard"
   #   terrain: "rough_b"
   #   vx: 0.5
   #   vy: 0.0
   #   vyaw: 0.0
-  #   tracking_threshold: 0.15
+  #   tracking_threshold: 0.13

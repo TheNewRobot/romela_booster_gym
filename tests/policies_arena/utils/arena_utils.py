@@ -146,7 +146,8 @@ def print_stage_result(
     tracking_error: Optional[float],
     passed: bool,
     survival_threshold: float,
-    tracking_threshold: Optional[float] = None
+    tracking_threshold: Optional[float] = None,
+    suffix: str = ""
 ):
     """Print formatted stage result."""
     status = "✓ PASS" if passed else "✗ FAIL"
@@ -154,7 +155,7 @@ def print_stage_result(
     tracking_str = ""
     if tracking_error is not None:
         thresh_str = f"/{tracking_threshold:.3f}" if tracking_threshold else ""
-        tracking_str = f"  TrackErr: {tracking_error:.3f}{thresh_str}"
+        tracking_str = f"  TrackErr: {tracking_error:.3f}{thresh_str}{suffix}"
     
     print(f"  [{policy_name}] Stage {stage_idx+1} '{stage_name}': "
           f"Survival: {survival_rate:.1%}/{survival_threshold:.0%}{tracking_str}  {status}")

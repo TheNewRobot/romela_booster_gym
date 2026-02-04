@@ -18,8 +18,7 @@ from tests.policies_arena.utils.arena_utils import (
     load_yaml, set_seed, parse_arena_config, get_stage_commands,
     check_survival, compute_tracking_error, check_stage_pass,
     create_output_dir, save_results_csv, print_stage_result,
-    print_arena_header, print_arena_summary, quat_rotate_inverse,
-    setup_terrain
+    print_arena_header, print_arena_summary, quat_rotate_inverse
 )
 from utils.config_loader import find_experiment_config, load_config
 from utils.policy_loader import load_policy
@@ -89,32 +88,27 @@ class MuJoCoArenaEvaluator:
     
     def _setup_mujoco(self):
         """Setup MuJoCo model and data structures."""
-        # Check if any stage uses non-flat terrain
-        needs_heightfield = any(
-            self.terrains[stage['terrain']].get('type') not in ('flat', 'plane')
-            for stage in self.stages
-        )
+        # Store both XML paths for switching between flat and terrain stages
+        self.plane_xml = self.task_cfg["asset"]["mujoco_file"]
+        self.arena_xml = self.task_cfg["asset"].get("mujoco_arena_file")
+        if not self.arena_xml:
+            self.arena_xml = self.plane_xml.replace(".xml", "_arena.xml")
         
-        if needs_heightfield:
-            # Use arena model with heightfield for rough terrain
-            arena_xml = self.task_cfg["asset"].get("mujoco_arena_file")
-            if not arena_xml:
-                base_xml = self.task_cfg["asset"]["mujoco_file"]
-                arena_xml = base_xml.replace(".xml", "_arena.xml")
-            
-            if not os.path.exists(arena_xml):
-                print(f"[!] Arena XML not found: {arena_xml}")
-                print(f"    Falling back to: {self.task_cfg['asset']['mujoco_file']}")
-                arena_xml = self.task_cfg["asset"]["mujoco_file"]
-        else:
-            # Use plane model for flat-only evaluation (stable contact physics)
-            arena_xml = self.task_cfg["asset"]["mujoco_file"]
+        if not os.path.exists(self.arena_xml):
+            print(f"[!] Arena XML not found: {self.arena_xml}, rough/slope terrain disabled")
+            self.arena_xml = None
         
-        print(f"Loading MuJoCo model: {arena_xml}")
-        self.mj_model = mujoco.MjModel.from_xml_path(arena_xml)
+        # Start with plane model
+        print(f"Loading MuJoCo model: {self.plane_xml}")
+        self.mj_model = mujoco.MjModel.from_xml_path(self.plane_xml)
+        self.current_xml = self.plane_xml
         self.mj_model.opt.timestep = self.task_cfg["sim"]["dt"]
         self.mj_data = mujoco.MjData(self.mj_model)
         
+        self._setup_actuators()
+    
+    def _setup_actuators(self):
+        """Setup actuator parameters from config."""
         self.num_actuators = self.mj_model.nu
         self.default_dof_pos = np.zeros(self.num_actuators, dtype=np.float32)
         self.dof_stiffness = np.zeros(self.num_actuators, dtype=np.float32)
@@ -191,6 +185,56 @@ class MuJoCoArenaEvaluator:
         expected_name = joint_map.get(joint_idx, "")
         return expected_name in actuator_name
     
+    def _setup_terrain_for_stage(self, terrain_cfg: dict, seed: int):
+        """Setup terrain for a stage, switching XML if needed."""
+        terrain_type = terrain_cfg.get('type', 'plane')
+        needs_heightfield = terrain_type not in ('flat', 'plane')
+        
+        # Switch XML if needed
+        target_xml = self.arena_xml if needs_heightfield else self.plane_xml
+        if target_xml and self.current_xml != target_xml:
+            print(f"  Switching to: {os.path.basename(target_xml)}")
+            self.mj_model = mujoco.MjModel.from_xml_path(target_xml)
+            self.mj_model.opt.timestep = self.task_cfg["sim"]["dt"]
+            self.mj_data = mujoco.MjData(self.mj_model)
+            self.current_xml = target_xml
+            self._setup_actuators()
+            self._load_sim_params()
+        
+        # Setup heightfield terrain if using arena model
+        if needs_heightfield and self.mj_model.nhfield > 0:
+            nrow = self.mj_model.hfield_nrow[0]
+            ncol = self.mj_model.hfield_ncol[0]
+            max_height = self.mj_model.hfield_size[0][2]
+            size_x = self.mj_model.hfield_size[0][0]
+            
+            # X coordinates for each column
+            x = np.linspace(-size_x, size_x, ncol)
+            
+            if 'random_height' in terrain_cfg:
+                # Rough terrain: random bumps
+                rng = np.random.RandomState(seed)
+                terrain = rng.uniform(0, terrain_cfg['random_height'], (nrow, ncol))
+            elif 'slope' in terrain_cfg:
+                # Slope terrain: 1.5m flat start, then continuous slope
+                FLAT_START = 1.5  # Hardcoded flat start distance
+                slope_gradient = terrain_cfg['slope']
+                
+                heights = np.zeros(ncol)
+                for i, xi in enumerate(x):
+                    if xi < FLAT_START:
+                        heights[i] = 0.0
+                    else:
+                        heights[i] = slope_gradient * (xi - FLAT_START)
+                
+                terrain = np.tile(heights, (nrow, 1))
+            else:
+                terrain = np.zeros((nrow, ncol))
+            
+            normalized = terrain / max_height if max_height > 0 else terrain
+            normalized = np.clip(normalized, 0, 1)
+            self.mj_model.hfield_data[:] = normalized.flatten().astype(np.float32)
+    
     def _reset_robot(self):
         """Reset robot to initial pose."""
         self.mj_data.qpos[:] = self.initial_qpos
@@ -236,16 +280,14 @@ class MuJoCoArenaEvaluator:
         stage: dict,
         terrain_cfg: dict,
         seed: int
-    ) -> Tuple[bool, Optional[float], List[float]]:
+    ) -> Tuple[bool, Optional[float], Optional[float], List[float]]:
         """
         Run single trial for a policy on a stage.
         
-        Returns: (survived, tracking_error, velocity_history)
+        Returns: (survived, tracking_error_cmd, tracking_error_full, velocity_history)
         """
         set_seed(seed)
-        # Setup terrain for heightfield models only
-        if self.mj_model.nhfield > 0:
-            setup_terrain(self.mj_model, terrain_cfg, seed)
+        self._setup_terrain_for_stage(terrain_cfg, seed)
         self._reset_robot()
         
         cfg = self.task_cfg
@@ -330,10 +372,35 @@ class MuJoCoArenaEvaluator:
         
         if velocity_errors:
             errors = np.array(velocity_errors)
-            tracking_error = float(np.max([errors[:, 0].mean(), errors[:, 1].mean(), errors[:, 2].mean()]))
+            # Per-dimension mean errors
+            err_vx = float(errors[:, 0].mean())
+            err_vy = float(errors[:, 1].mean())
+            err_vyaw = float(errors[:, 2].mean())
+            
+            # Full tracking error (all dimensions)
+            tracking_error_full = float(np.max([err_vx, err_vy, err_vyaw]))
+            
+            # Commanded-only tracking error (for rough terrain pass criteria)
+            cmd_vx, cmd_vy, cmd_vyaw = stage['vx'], stage['vy'], stage['vyaw']
+            commanded_errors = []
+            if abs(cmd_vx) > 0.01:
+                commanded_errors.append(err_vx)
+            if abs(cmd_vy) > 0.01:
+                commanded_errors.append(err_vy)
+            if abs(cmd_vyaw) > 0.01:
+                commanded_errors.append(err_vyaw)
+            
+            if commanded_errors:
+                tracking_error_cmd = float(np.max(commanded_errors))
+            else:
+                tracking_error_cmd = tracking_error_full
+            
+            per_dim_errors = (err_vx, err_vy, err_vyaw)
         else:
-            tracking_error = None
-        return survived, tracking_error, velocity_errors
+            tracking_error_cmd = None
+            tracking_error_full = None
+            per_dim_errors = None
+        return survived, tracking_error_cmd, tracking_error_full, per_dim_errors
     
     def _evaluate_policy_on_stage(
         self,
@@ -341,38 +408,140 @@ class MuJoCoArenaEvaluator:
         policy,
         is_jit: bool,
         stage_idx: int
-    ) -> Tuple[float, Optional[float], bool]:
+    ) -> Tuple[float, Optional[float], Optional[float], bool]:
         """
         Evaluate a policy on a single stage across multiple trials.
         
-        Returns: (survival_rate, mean_tracking_error, passed)
+        Returns: (survival_rate, mean_tracking_error_cmd, mean_tracking_error_full, passed)
         """
         stage = self.stages[stage_idx]
         terrain_name = stage['terrain']
         terrain_cfg = self.terrains[terrain_name]
         tracking_threshold = stage.get('tracking_threshold')
         
+        tracking_mode = terrain_cfg.get('tracking_mode', 'full')
+        
         survivals = []
-        tracking_errors = []
+        tracking_errors_cmd = []
+        tracking_errors_full = []
+        
+        per_dim_vx = []
+        per_dim_vy = []
+        per_dim_vyaw = []
         
         for trial in range(self.num_trials):
             seed = self.base_seed + stage_idx * 1000 + trial
-            survived, tracking_error, _ = self._run_trial(
+            survived, tracking_error_cmd, tracking_error_full, per_dim = self._run_trial(
                 policy, is_jit, stage, terrain_cfg, seed
             )
             survivals.append(survived)
-            if tracking_error is not None:
-                tracking_errors.append(tracking_error)
+            if tracking_error_cmd is not None:
+                tracking_errors_cmd.append(tracking_error_cmd)
+            if tracking_error_full is not None:
+                tracking_errors_full.append(tracking_error_full)
+            if per_dim is not None:
+                per_dim_vx.append(per_dim[0])
+                per_dim_vy.append(per_dim[1])
+                per_dim_vyaw.append(per_dim[2])
         
         survival_rate = np.mean(survivals)
-        mean_tracking_error = np.mean(tracking_errors) if tracking_errors else None
+        mean_tracking_error_cmd = np.mean(tracking_errors_cmd) if tracking_errors_cmd else None
+        mean_tracking_error_full = np.mean(tracking_errors_full) if tracking_errors_full else None
+        mean_per_dim = (
+            np.mean(per_dim_vx) if per_dim_vx else 0.0,
+            np.mean(per_dim_vy) if per_dim_vy else 0.0,
+            np.mean(per_dim_vyaw) if per_dim_vyaw else 0.0
+        )
+        
+        # Use tracking_mode from terrain config: "commanded" or "full"
+        if tracking_mode == "commanded":
+            pass_tracking_error = mean_tracking_error_cmd
+        else:
+            pass_tracking_error = mean_tracking_error_full
         
         passed = check_stage_pass(
             survival_rate, self.survival_threshold,
-            mean_tracking_error, tracking_threshold
+            pass_tracking_error, tracking_threshold
         )
         
-        return survival_rate, mean_tracking_error, passed
+        return survival_rate, mean_tracking_error_cmd, mean_tracking_error_full, mean_per_dim, passed
+    
+    def _get_terrain_group(self, terrain_name: str) -> str:
+        """Classify terrain into group: flat, slope, or rough."""
+        terrain_cfg = self.terrains[terrain_name]
+        if 'random_height' in terrain_cfg:
+            return 'rough'
+        elif 'slope' in terrain_cfg:
+            return 'slope'
+        else:
+            return 'flat'
+    
+    def _print_terrain_breakdown(self):
+        """Print and save average tracking error per terrain group per policy."""
+        if not self.results:
+            return
+        
+        # Group results by policy and terrain group
+        policy_terrain_errors = {}
+        for r in self.results:
+            policy = r['policy_name']
+            group = self._get_terrain_group(r['terrain'])
+            key = (policy, group)
+            if key not in policy_terrain_errors:
+                policy_terrain_errors[key] = []
+            # Use the display error (cmd for commanded mode, full otherwise)
+            terrain_cfg = self.terrains[r['terrain']]
+            tracking_mode = terrain_cfg.get('tracking_mode', 'full')
+            if tracking_mode == 'commanded':
+                policy_terrain_errors[key].append(r['tracking_error_cmd'])
+            else:
+                policy_terrain_errors[key].append(r['tracking_error_full'])
+        
+        # Compute averages
+        policies = list(dict.fromkeys(r['policy_name'] for r in self.results))
+        groups = ['flat', 'slope', 'rough']
+        available_groups = [g for g in groups if any((p, g) in policy_terrain_errors for p in policies)]
+        
+        width = 60
+        print(f"\n{'='*width}")
+        print("TERRAIN BREAKDOWN (avg tracking error)".center(width))
+        print(f"{'='*width}")
+        
+        # Header
+        header = f"  {'Policy':<14}"
+        for g in available_groups:
+            header += f"{g.capitalize():>10}"
+        header += f"{'Overall':>10}"
+        print(header)
+        print(f"  {'-'*(len(header)-2)}")
+        
+        # Rows + collect for CSV
+        summary_rows = []
+        for policy in policies:
+            row = f"  {policy:<14}"
+            all_errors = []
+            row_dict = {'policy_name': policy}
+            for g in available_groups:
+                key = (policy, g)
+                if key in policy_terrain_errors and policy_terrain_errors[key]:
+                    avg = np.mean(policy_terrain_errors[key])
+                    row += f"{avg:>10.3f}"
+                    all_errors.extend(policy_terrain_errors[key])
+                    row_dict[f'{g}_avg_error'] = round(avg, 4)
+                else:
+                    row += f"{'N/A':>10}"
+                    row_dict[f'{g}_avg_error'] = None
+            
+            overall = np.mean(all_errors) if all_errors else 0.0
+            row += f"{overall:>10.3f}"
+            row_dict['overall_avg_error'] = round(overall, 4)
+            print(row)
+            summary_rows.append(row_dict)
+        
+        print(f"{'='*width}")
+        
+        # Save summary CSV
+        save_results_csv(summary_rows, self.output_dir, filename="terrain_summary.csv")
     
     def run(self):
         """Run full arena evaluation."""
@@ -392,9 +561,12 @@ class MuJoCoArenaEvaluator:
                 
                 policy, is_jit = load_policy(policy_cfg['checkpoint'], self.task_cfg)
                 
-                survival_rate, tracking_error, passed = self._evaluate_policy_on_stage(
+                survival_rate, tracking_error_cmd, tracking_error_full, per_dim, passed = self._evaluate_policy_on_stage(
                     policy_name, policy, is_jit, stage_idx
                 )
+                
+                terrain_cfg = self.terrains[stage['terrain']]
+                tracking_mode = terrain_cfg.get('tracking_mode', 'full')
                 
                 self.results.append({
                     'policy_name': policy_name,
@@ -402,23 +574,38 @@ class MuJoCoArenaEvaluator:
                     'stage_name': stage['name'],
                     'terrain': stage['terrain'],
                     'survival_rate': survival_rate,
-                    'tracking_error': tracking_error if tracking_error else 0.0,
+                    'tracking_error_cmd': tracking_error_cmd if tracking_error_cmd else 0.0,
+                    'tracking_error_full': tracking_error_full if tracking_error_full else 0.0,
+                    'vx_error': per_dim[0],
+                    'vy_error': per_dim[1],
+                    'vyaw_error': per_dim[2],
                     'tracking_threshold': stage.get('tracking_threshold', 0.0),
                     'passed': passed,
                 })
                 
+                # Print with indicator for rough terrain (commanded-only)
+                if tracking_mode == "commanded":
+                    display_error = tracking_error_cmd
+                    suffix = f" (cmd-only, full={tracking_error_full:.3f})" if tracking_error_full else " (cmd-only)"
+                else:
+                    display_error = tracking_error_full
+                    suffix = f" (full, cmd={tracking_error_cmd:.3f})" if tracking_error_cmd else ""
+                
+                # Add per-dimension breakdown
+                dim_str = f" [vx={per_dim[0]:.3f}, vy={per_dim[1]:.3f}, vyaw={per_dim[2]:.3f}]"
+                
                 print_stage_result(
                     stage_idx, stage['name'], policy_name,
-                    survival_rate, tracking_error, passed,
-                    self.survival_threshold, stage.get('tracking_threshold')
+                    survival_rate, display_error, passed,
+                    self.survival_threshold, stage.get('tracking_threshold'),
+                    suffix + dim_str
                 )
                 
                 if passed:
                     self.policy_status[policy_name]['final_stage'] = stage_idx + 1
-                else:
-                    self.policy_status[policy_name]['alive'] = False
         
         save_results_csv(self.results, self.output_dir)
+        self._print_terrain_breakdown()
         print_arena_summary(self.policy_status, len(self.stages), self.output_dir)
 
 def main():

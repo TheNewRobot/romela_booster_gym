@@ -11,7 +11,7 @@ import numpy as np
 # ============================================================
 # USER CONFIG - Edit this timestamp to match your experiment
 # ============================================================
-TIMESTAMP = "2026-01-31-10-58-32"
+TIMESTAMP = "2026-02-04-15-18-10"
 
 # ============================================================
 # Path Construction
@@ -84,19 +84,62 @@ def plot_error_heatmap(ax, df, error_column, title):
                        fontsize=8, color=text_color)
 
 
+def plot_terrain_breakdown(ax, experiment_dir):
+    """Plot terrain breakdown as grouped bar chart."""
+    summary_path = os.path.join(experiment_dir, "terrain_summary.csv")
+    if not os.path.exists(summary_path):
+        ax.text(0.5, 0.5, 'No terrain summary data', ha='center', va='center', transform=ax.transAxes)
+        return
+    
+    df_summary = pd.read_csv(summary_path)
+    policies = df_summary['policy_name'].tolist()
+    
+    # Find available terrain groups
+    terrain_cols = [c for c in df_summary.columns if c.endswith('_avg_error') and c != 'overall_avg_error']
+    terrain_names = [c.replace('_avg_error', '').capitalize() for c in terrain_cols]
+    
+    x = np.arange(len(policies))
+    n_groups = len(terrain_cols) + 1  # +1 for overall
+    bar_width = 0.8 / n_groups
+    
+    colors = {'flat': '#4CAF50', 'slope': '#FF9800', 'rough': '#F44336', 'overall': '#2196F3'}
+    
+    for i, (col, name) in enumerate(zip(terrain_cols, terrain_names)):
+        values = df_summary[col].fillna(0).values
+        color = colors.get(name.lower(), '#9E9E9E')
+        ax.bar(x + i * bar_width, values, bar_width, label=name, color=color, alpha=0.85)
+    
+    # Overall bar
+    overall = df_summary['overall_avg_error'].fillna(0).values
+    ax.bar(x + len(terrain_cols) * bar_width, overall, bar_width, label='Overall', color=colors['overall'], alpha=0.85)
+    
+    ax.set_xlabel('Policy')
+    ax.set_ylabel('Avg Tracking Error')
+    ax.set_title('Tracking Error by Terrain')
+    ax.set_xticks(x + bar_width * n_groups / 2 - bar_width / 2)
+    ax.set_xticklabels(policies, fontsize=8)
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3, axis='y')
+
+
 def main():
     print(f"Loading results from: {CSV_PATH}")
     df = load_results(CSV_PATH)
     
     print(f"Found {len(df['policy_name'].unique())} policies, {len(df['stage'].unique())} stages")
     
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     fig.suptitle(f'Policy Arena Results — {TIMESTAMP}', fontsize=14, fontweight='bold')
     
+    # Row 1: Survival + Per-dimension heatmaps
     plot_survival_rate(axes[0, 0], df)
     plot_error_heatmap(axes[0, 1], df, 'vx_error', 'Vx Tracking Error')
-    plot_error_heatmap(axes[1, 0], df, 'vy_error', 'Vy Tracking Error')
-    plot_error_heatmap(axes[1, 1], df, 'vyaw_error', 'Vyaw Tracking Error')
+    plot_error_heatmap(axes[0, 2], df, 'vy_error', 'Vy Tracking Error')
+    
+    # Row 2: Vyaw heatmap + Terrain breakdown
+    plot_error_heatmap(axes[1, 0], df, 'vyaw_error', 'Vyaw Tracking Error')
+    plot_error_heatmap(axes[1, 1], df, 'tracking_error_full', 'Full Tracking Error')
+    plot_terrain_breakdown(axes[1, 2], EXPERIMENT_DIR)
     
     plt.tight_layout()
     plt.savefig(OUTPUT_PATH, dpi=150, bbox_inches='tight')

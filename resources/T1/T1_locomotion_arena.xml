@@ -6,7 +6,7 @@
         <texture name="texplane" type="2d" builtin="checker" rgb1=".2 .3 .4" rgb2=".1 0.15 0.2" width="512" height="512" mark="cross" markrgb=".8 .8 .8"/>
         <material name="matplane" reflectance="0.3" texture="texplane" texrepeat="1 1" texuniform="true"/>
         <!-- Heightfield for terrain: 100x100 grid, 10m x 10m area, max height 0.5m, base height 0.01m -->
-        <hfield name="terrain" nrow="200" ncol="200" size="25 25 0.5 0.01"/>
+        <hfield name="terrain" nrow="800" ncol="800" size="25 25 0.5 0.01"/>
         <mesh name="Trunk" file="Trunk.STL" />
         <mesh name="H1" file="H1.STL" />
         <mesh name="H2" file="H2.STL" />
