@@ -1,67 +1,64 @@
-
-Readme · MD
-Copy
-
 # Policy Arena Evaluation
 
 Automated testing of locomotion policies through progressive difficulty stages. Policies that fail a stage are eliminated; survivors advance.
 
 ## Quick Start
-
 ```bash
-# Run evaluation with default config
-python tests/policies_arena/evaluate.py --task=T1
+# Isaac Gym evaluation (spawns subprocesses per terrain)
+python tests/policies_arena/scripts/evaluate.py --task=T1
 
-# Run with visualization (first policy only, 1 env)
-python tests/policies_arena/evaluate.py --task=T1 --headless=false
+# MuJoCo evaluation (single process, supports calibrated sim params)
+python tests/policies_arena/scripts/evaluate_mujoco.py --task=T1
 
-# Use custom config
-python tests/policies_arena/evaluate.py --task=T1 --config=path/to/custom_config.yaml
+# MuJoCo with calibrated joint dynamics
+python tests/policies_arena/scripts/evaluate_mujoco.py --task=T1 --sim-params=calibrated
 
-# Plot the results (change the experiment date and then run)
-python tests/policies_arena/plot_results.py --task=T1 
+# With visualization
+python tests/policies_arena/scripts/evaluate_mujoco.py --task=T1 --headless=false --num-trials=1
 ```
+
+## Evaluators
+
+| Feature | Isaac Gym (`evaluate.py`) | MuJoCo (`evaluate_mujoco.py`) |
+|---------|---------------------------|-------------------------------|
+| Parallel envs | Yes (64 default) | No (sequential trials) |
+| Subprocess spawning | Yes (one per terrain) | No |
+| Calibrated sim params | No | Yes (`--sim-params=calibrated`) |
+| Rough terrain | Yes | Limited (see below) |
 
 ## Configuration
 
-Edit `arena_config.yaml` to configure:
-
-- **policies**: List of checkpoints to compare
-- **evaluation**: Number of envs, survival threshold, seed
-- **timing**: Stage duration, settle time, ramp time
-- **terrains**: Define terrain types (flat, slope, rough)
-- **stages**: Define test stages (terrain + velocity commands + pass threshold)
+Edit `config/arena_config.yaml` to configure:
+- **policies**: Checkpoints to compare
+- **evaluation**: Survival threshold, seed, headless
+- **timing**: Stage duration, settle/ramp times
+- **terrains**: Terrain type definitions
+- **stages**: Test stages (terrain + velocity commands)
 
 ## Output
-
-Each run creates:
 ```
-exp/T1/<timestamp>/
-├── results.csv      # Metrics per (policy, stage)
-└── config.yaml      # Config snapshot for reproducibility
+exps/T1/<timestamp>/
+├── results.csv          # Metrics per (policy, stage)
+├── arena_config.yaml    # Config snapshot
+└── task_config.yaml     # Task config snapshot
 ```
-
-### CSV Columns
-| Column | Description |
-|--------|-------------|
-| policy_name | Policy identifier |
-| stage | Stage number (1-indexed) |
-| stage_name | Stage display name |
-| terrain | Terrain type used |
-| vx_cmd, vy_cmd, vyaw_cmd | Commanded velocities |
-| survival_rate | Fraction of envs that survived |
-| vx_error, vy_error, vyaw_error | Mean tracking errors |
-| mean_height | Average base height |
-| mean_power | Average power consumption |
-| passed | true/false |
 
 ## Pass Criteria
 
-- **Survival**: ≥90% of environments must not trigger reset
-- **Tracking** (if threshold set): Max velocity error < threshold
+- **Survival**: ≥90% of trials must not fall, this can be tuned
+- **Tracking** (optional): Max velocity error < threshold
 
-## Notes
 
-- Isaac Gym only allows one simulation per process, so the script spawns subprocesses for each terrain type automatically
-- Stages using the same terrain run in a single subprocess (faster)
-- Metrics are computed over the last 50% of each stage (steady-state)
+## Directory Structure
+```
+tests/policies_arena/
+├── README.md
+├── config/
+│   └── arena_config.yaml
+├── scripts/
+│   ├── evaluate.py          # Isaac Gym evaluator
+│   ├── evaluate_mujoco.py   # MuJoCo evaluator
+│   └── plot_results.py      # Results visualization
+└── utils/
+    └── arena_utils.py       # Shared utilities
+```
