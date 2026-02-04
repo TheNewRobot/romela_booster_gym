@@ -136,6 +136,9 @@ if __name__ == "__main__":
     dof_targets = np.copy(default_dof_pos)
     gait_frequency = gait_process = 0.0
     it = 0
+    filter_weight = 0.02
+    filtered_lin_vel = np.zeros(3, dtype=np.float32)
+    filtered_ang_vel = np.zeros(3, dtype=np.float32)
     
     # Viewer state
     state = {
@@ -155,10 +158,13 @@ if __name__ == "__main__":
     initial_qpos = mj_data.qpos.copy()
     initial_qvel = np.zeros_like(mj_data.qvel)
 
-    def print_status():
+    def print_status(filtered_vel=None):
         mode = "PLAY" if state["is_playing"] else "PAUSE"
         cam = "FOLLOW" if state["camera_follow"] else "FREE"
-        print(f"\r[{mode}] [{cam}] Cmd: vx={state['vx']:+.2f}  vy={state['vy']:+.2f}  vyaw={state['vyaw']:+.2f}    ", end="", flush=True)
+        if filtered_vel is not None:
+            print(f"\r[{mode}] [{cam}] Cmd: vx={state['vx']:+.2f} vy={state['vy']:+.2f} vyaw={state['vyaw']:+.2f} | Filt: vx={filtered_vel[0]:+.2f} vy={filtered_vel[1]:+.2f} vyaw={filtered_vel[2]:+.2f}    ", end="", flush=True)
+        else:
+            print(f"\r[{mode}] [{cam}] Cmd: vx={state['vx']:+.2f}  vy={state['vy']:+.2f}  vyaw={state['vyaw']:+.2f}    ", end="", flush=True)
 
     def key_callback(keycode):
         # GLFW key codes: Arrow Up=265, Down=264, Left=263, Right=262, Q=81, E=69, R=82, Space=32, O=79
@@ -293,3 +299,13 @@ if __name__ == "__main__":
             viewer.sync()
             it += 1
             gait_process = np.fmod(gait_process + cfg["sim"]["dt"] * gait_frequency, 1.0)
+            
+            # Update filtered velocity at policy rate
+            if it % cfg["control"]["decimation"] == 0:
+                base_lin_vel_world = mj_data.qvel[0:3]
+                base_lin_vel_local = quat_rotate_inverse(quat, base_lin_vel_world)
+                base_ang_vel_world = mj_data.qvel[3:6]
+                filtered_lin_vel[:] = filter_weight * base_lin_vel_local + (1 - filter_weight) * filtered_lin_vel
+                filtered_ang_vel[:] = filter_weight * base_ang_vel_world + (1 - filter_weight) * filtered_ang_vel
+                filtered_vel = [filtered_lin_vel[0], filtered_lin_vel[1], filtered_ang_vel[2]]
+                print_status(filtered_vel)
