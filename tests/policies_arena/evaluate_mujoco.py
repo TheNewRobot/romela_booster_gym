@@ -89,14 +89,25 @@ class MuJoCoArenaEvaluator:
     
     def _setup_mujoco(self):
         """Setup MuJoCo model and data structures."""
-        arena_xml = self.task_cfg["asset"].get("mujoco_arena_file")
-        if not arena_xml:
-            base_xml = self.task_cfg["asset"]["mujoco_file"]
-            arena_xml = base_xml.replace(".xml", "_arena.xml")
+        # Check if any stage uses non-flat terrain
+        needs_heightfield = any(
+            self.terrains[stage['terrain']].get('type') not in ('flat', 'plane')
+            for stage in self.stages
+        )
         
-        if not os.path.exists(arena_xml):
-            print(f"[!] Arena XML not found: {arena_xml}")
-            print(f"    Falling back to: {self.task_cfg['asset']['mujoco_file']}")
+        if needs_heightfield:
+            # Use arena model with heightfield for rough terrain
+            arena_xml = self.task_cfg["asset"].get("mujoco_arena_file")
+            if not arena_xml:
+                base_xml = self.task_cfg["asset"]["mujoco_file"]
+                arena_xml = base_xml.replace(".xml", "_arena.xml")
+            
+            if not os.path.exists(arena_xml):
+                print(f"[!] Arena XML not found: {arena_xml}")
+                print(f"    Falling back to: {self.task_cfg['asset']['mujoco_file']}")
+                arena_xml = self.task_cfg["asset"]["mujoco_file"]
+        else:
+            # Use plane model for flat-only evaluation (stable contact physics)
             arena_xml = self.task_cfg["asset"]["mujoco_file"]
         
         print(f"Loading MuJoCo model: {arena_xml}")
@@ -232,7 +243,9 @@ class MuJoCoArenaEvaluator:
         Returns: (survived, tracking_error, velocity_history)
         """
         set_seed(seed)
-        setup_terrain(self.mj_model, terrain_cfg, seed)
+        # Setup terrain for heightfield models only
+        if self.mj_model.nhfield > 0:
+            setup_terrain(self.mj_model, terrain_cfg, seed)
         self._reset_robot()
         
         cfg = self.task_cfg
@@ -251,7 +264,7 @@ class MuJoCoArenaEvaluator:
         step = 0
         
         # Velocity filtering (exponential moving average)
-        filter_weight = 0.02  # Applied at 50Hz (policy rate), not 500Hz
+        filter_weight = cfg["normalization"].get("filter_weight", 0.1)
         filtered_lin_vel = np.zeros(3, dtype=np.float32)
         filtered_ang_vel = np.zeros(3, dtype=np.float32)
         
@@ -299,22 +312,18 @@ class MuJoCoArenaEvaluator:
             
             mujoco.mj_step(self.mj_model, self.mj_data)
             
+            # Update filtered velocity at policy rate (matches play_mujoco)
             if step % decimation == 0:
-                base_lin_vel_world = self.mj_data.qvel[0:3]
-                base_lin_vel_local = quat_rotate_inverse(quat, base_lin_vel_world)
-                base_ang_vel_world = self.mj_data.qvel[3:6]
-                
+                quat_current = self.mj_data.sensor("orientation").data[[1, 2, 3, 0]].astype(np.float32)
+                base_lin_vel_local = quat_rotate_inverse(quat_current, self.mj_data.qvel[0:3])
+                base_ang_vel_local = quat_rotate_inverse(quat_current, self.mj_data.qvel[3:6])
                 filtered_lin_vel = filter_weight * base_lin_vel_local + (1 - filter_weight) * filtered_lin_vel
-                filtered_ang_vel = filter_weight * base_ang_vel_world + (1 - filter_weight) * filtered_ang_vel
-            
+                filtered_ang_vel = filter_weight * base_ang_vel_local + (1 - filter_weight) * filtered_ang_vel
             if t >= metrics_start:
                 vx_err = abs(vx - filtered_lin_vel[0])
                 vy_err = abs(vy - filtered_lin_vel[1])
                 vyaw_err = abs(vyaw - filtered_ang_vel[2])
                 velocity_errors.append([vx_err, vy_err, vyaw_err])
-                if step % 500 == 0:
-                    print(f"    t={t:.1f}s cmd=({vx:.2f},{vy:.2f},{vyaw:.2f}) filtered=({filtered_lin_vel[0]:.2f},{filtered_lin_vel[1]:.2f},{filtered_ang_vel[2]:.2f})")
-            
             gait_process = np.fmod(gait_process + dt * gait_frequency, 1.0)
             t += dt
             step += 1
@@ -412,7 +421,6 @@ class MuJoCoArenaEvaluator:
         save_results_csv(self.results, self.output_dir)
         print_arena_summary(self.policy_status, len(self.stages), self.output_dir)
 
-
 def main():
     parser = argparse.ArgumentParser(description='MuJoCo Policy Arena Evaluation')
     parser.add_argument('--task', type=str, default='T1', help='Task name')
@@ -420,7 +428,7 @@ def main():
                         help='Path to arena configuration file')
     parser.add_argument('--headless', type=str, default=None, choices=['true', 'false'],
                         help='Override headless setting')
-    parser.add_argument('--num-trials', type=int, default=10,
+    parser.add_argument('--num-trials', type=int, default=32,
                         help='Number of trials per policy per stage')
     parser.add_argument('--sim-params', type=str, default='default',
                         choices=['default', 'calibrated'],
@@ -435,7 +443,6 @@ def main():
     if not os.path.exists(args.config):
         print(f"[!] Config file not found: {args.config}")
         sys.exit(1)
-    
     evaluator = MuJoCoArenaEvaluator(
         args.config,
         args.task,
@@ -443,7 +450,6 @@ def main():
         args.num_trials,
         args.sim_params
     )
-    
     try:
         evaluator.run()
     except KeyboardInterrupt:
@@ -452,34 +458,5 @@ def main():
         print_arena_summary(evaluator.policy_status, len(evaluator.stages), evaluator.output_dir)
         sys.exit(0)
 
-
 if __name__ == '__main__':
-    # Add --visualize flag
-    import sys
-    if '--visualize' in sys.argv:
-        sys.argv.remove('--visualize')
-        # Run single visual trial
-        from tests.policies_arena.arena_utils import load_yaml, setup_terrain
-        from utils.config_loader import find_experiment_config, load_config  
-        from utils.policy_loader import load_policy
-        import mujoco.viewer
-        
-        arena_cfg = load_yaml('tests/policies_arena/arena_config.yaml')
-        policy_path = arena_cfg['policies'][0]['checkpoint']
-        cfg_file = find_experiment_config(policy_path)
-        task_cfg = load_config(cfg_file)
-        policy, is_jit = load_policy(policy_path, task_cfg)
-        
-        mj_model = mujoco.MjModel.from_xml_path("resources/T1/T1_locomotion_arena.xml")
-        mj_model.opt.timestep = task_cfg["sim"]["dt"]
-        mj_data = mujoco.MjData(mj_model)
-        
-        # Set flat terrain
-        mj_model.hfield_data[:] = 0
-        
-        print("Press Space to start, watch if robot walks straight with vx=0.5")
-        # ... rest of play_mujoco logic with vx=0.5 hardcoded
-        
-        sys.exit(0)
-    
     main()

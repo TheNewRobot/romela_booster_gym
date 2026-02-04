@@ -61,6 +61,7 @@ if __name__ == "__main__":
     print(f"Policy type: {'JIT' if is_jit else 'ActorCritic'}")
 
     mj_model = mujoco.MjModel.from_xml_path(cfg["asset"]["mujoco_file"])
+    # mj_model = mujoco.MjModel.from_xml_path("resources/T1/T1_locomotion_arena.xml")
     mj_model.opt.timestep = cfg["sim"]["dt"]
     mj_data = mujoco.MjData(mj_model)
     mujoco.mj_resetData(mj_model, mj_data)
@@ -136,7 +137,7 @@ if __name__ == "__main__":
     dof_targets = np.copy(default_dof_pos)
     gait_frequency = gait_process = 0.0
     it = 0
-    filter_weight = 0.02
+    filter_weight = cfg["normalization"].get("filter_weight", 0.1)
     filtered_lin_vel = np.zeros(3, dtype=np.float32)
     filtered_ang_vel = np.zeros(3, dtype=np.float32)
     
@@ -147,7 +148,7 @@ if __name__ == "__main__":
         "is_playing": False,
         "camera_follow": True,
     }
-    cmd_increment = {"vx": 0.2, "vy": 0.2, "vyaw": 0.3}
+    cmd_increment = {"vx": 0.1, "vy": 0.1, "vyaw": 0.1}
     cmd_limits = {"vx": (-1.0, 1.0), "vy": (-1.0, 1.0), "vyaw": (-1.0, 1.0)}
     
     # Camera settings from config
@@ -302,10 +303,11 @@ if __name__ == "__main__":
             
             # Update filtered velocity at policy rate
             if it % cfg["control"]["decimation"] == 0:
-                base_lin_vel_world = mj_data.qvel[0:3]
-                base_lin_vel_local = quat_rotate_inverse(quat, base_lin_vel_world)
-                base_ang_vel_world = mj_data.qvel[3:6]
+                # Rotate velocities from world to local frame (matches Isaac Gym)
+                quat_current = mj_data.sensor("orientation").data[[1, 2, 3, 0]].astype(np.float32)
+                base_lin_vel_local = quat_rotate_inverse(quat_current, mj_data.qvel[0:3])
+                base_ang_vel_local = quat_rotate_inverse(quat_current, mj_data.qvel[3:6])
+                
                 filtered_lin_vel[:] = filter_weight * base_lin_vel_local + (1 - filter_weight) * filtered_lin_vel
-                filtered_ang_vel[:] = filter_weight * base_ang_vel_world + (1 - filter_weight) * filtered_ang_vel
-                filtered_vel = [filtered_lin_vel[0], filtered_lin_vel[1], filtered_ang_vel[2]]
-                print_status(filtered_vel)
+                filtered_ang_vel[:] = filter_weight * base_ang_vel_local + (1 - filter_weight) * filtered_ang_vel
+                print_status([filtered_lin_vel[0], filtered_lin_vel[1], filtered_ang_vel[2]])

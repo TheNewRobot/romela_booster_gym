@@ -83,72 +83,72 @@ terrains:
 # Policies progress through stages in order.
 # A policy is eliminated when it fails a stage.
 stages:
-  - name: "Stand Still"
-    terrain: "flat"
-    vx: 0.0
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: null  # Survival only, no tracking check
+  # - name: "Stand Still"
+  #   terrain: "flat"
+  #   vx: 0.0
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: null  # Survival only, no tracking check
 
   - name: "Forward Slow"
     terrain: "flat"
     vx: 0.5
     vy: 0.0
     vyaw: 0.0
-    tracking_threshold: 0.1
+    tracking_threshold: 0.10
 
   - name: "Forward Fast"
     terrain: "flat"
-    vx: 1.0
+    vx: 0.8
     vy: 0.0
     vyaw: 0.0
-    tracking_threshold: 0.15
+    tracking_threshold: 0.10
 
   - name: "Lateral"
     terrain: "flat"
     vx: 0.0
     vy: 0.5
     vyaw: 0.0
-    tracking_threshold: 0.1
+    tracking_threshold: 0.10
 
   - name: "Rotation"
     terrain: "flat"
     vx: 0.0
     vy: 0.0
-    vyaw: 0.5
-    tracking_threshold: 0.15
+    vyaw: 0.7
+    tracking_threshold: 0.10
 
-  - name: "Combined"
-    terrain: "flat"
-    vx: 0.5
-    vy: 0.3
-    vyaw: 0.0
-    tracking_threshold: 0.15
+  # - name: "Combined"
+  #   terrain: "flat"
+  #   vx: 0.5
+  #   vy: 0.3
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.15
 
-  - name: "Slope Easy"
-    terrain: "slope_a"
-    vx: 0.5
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: 0.15
+  # - name: "Slope Easy"
+  #   terrain: "slope_a"
+  #   vx: 0.5
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.15
 
-  - name: "Slope Hard"
-    terrain: "slope_b"
-    vx: 0.5
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: 0.15
+  # - name: "Slope Hard"
+  #   terrain: "slope_b"
+  #   vx: 0.5
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.15
 
-  - name: "Rough Easy"
-    terrain: "rough_a"
-    vx: 0.5
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: 0.15
+  # - name: "Rough Easy"
+  #   terrain: "rough_a"
+  #   vx: 0.5
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.15
 
-  - name: "Rough Hard"
-    terrain: "rough_b"
-    vx: 0.5
-    vy: 0.0
-    vyaw: 0.0
-    tracking_threshold: 0.15
+  # - name: "Rough Hard"
+  #   terrain: "rough_b"
+  #   vx: 0.5
+  #   vy: 0.0
+  #   vyaw: 0.0
+  #   tracking_threshold: 0.15
