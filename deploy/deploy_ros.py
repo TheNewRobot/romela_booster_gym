@@ -3,6 +3,8 @@ import time
 import yaml
 import logging
 import threading
+import os
+from datetime import datetime
 
 from booster_robotics_sdk_python import (
     ChannelFactory,
@@ -20,25 +22,25 @@ from utils.remote_control_service import RemoteControlService
 from utils.rotate import rotate_vector_inverse_rpy
 from utils.timer import TimerConfig, Timer
 from utils.policy import Policy
+from deploy.utils.data_logger import DataLogger
 
-# ROS2 imports for data logging
-import rclpy
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from std_msgs.msg import Float32MultiArray
-from booster_msgs.msg import BoosterControlCmd, BoosterMotorCmd
+ENABLE_ROS2_LOGGING = True
+
+if ENABLE_ROS2_LOGGING:
+    import rclpy
+    from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+    from std_msgs.msg import Float32MultiArray
+    from booster_msgs.msg import BoosterControlCmd, BoosterMotorCmd
 
 
 class Controller:
-    def __init__(self, cfg_file) -> None:
-        # Setup logging
+    def __init__(self, cfg_file, task_name="experiment") -> None:
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
 
-        # Load config
         with open(cfg_file, "r", encoding="utf-8") as f:
             self.cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
 
-        # Initialize components
         self.remoteControlService = RemoteControlService()
         self.policy = Policy(cfg=self.cfg)
 
@@ -49,9 +51,15 @@ class Controller:
         self.running = True
 
         self.publish_lock = threading.Lock()
-        
-        # ROS2 logging initialization
-        self._init_ros2_logging()
+
+        # CSV data logger
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        output_dir = os.path.join("deploy", "data", task_name, timestamp)
+        self.data_logger = DataLogger(output_dir, num_joints=B1JointCnt)
+        self.logger.info(f"Data logger output: {output_dir}")
+
+        if ENABLE_ROS2_LOGGING:
+            self._init_ros2_logging()
 
     def _init_timer(self):
         self.timer = Timer(TimerConfig(time_step=self.cfg["common"]["dt"]))
@@ -68,6 +76,12 @@ class Controller:
         self.filtered_dof_target = np.zeros(B1JointCnt, dtype=np.float32)
         self.dof_pos_latest = np.zeros(B1JointCnt, dtype=np.float32)
 
+        # Logging buffers
+        self.dof_tau_est = np.zeros(B1JointCnt, dtype=np.float32)
+        self.imu_rpy = np.zeros(3, dtype=np.float32)
+        self.imu_gyro = np.zeros(3, dtype=np.float32)
+        self.imu_acc = np.zeros(3, dtype=np.float32)
+
     def _init_communication(self) -> None:
         try:
             self.low_cmd = LowCmd()
@@ -83,27 +97,25 @@ class Controller:
             raise
 
     def _init_ros2_logging(self):
-        """Initialize ROS2 publishers for data logging (does not affect control)"""
         rclpy.init()
         self.ros_node = rclpy.create_node('deploy_logger')
-        
+
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
             depth=1
         )
-        
+
         self.pub_control_cmd = self.ros_node.create_publisher(BoosterControlCmd, '/booster/control_cmd', qos)
         self.pub_motor_cmd = self.ros_node.create_publisher(BoosterMotorCmd, '/booster/motor_cmd', qos)
         self.pub_policy_obs = self.ros_node.create_publisher(Float32MultiArray, '/booster/policy_obs', qos)
         self.pub_policy_actions = self.ros_node.create_publisher(Float32MultiArray, '/booster/policy_actions', qos)
-        
-        # Pre-allocate messages to avoid repeated allocation
+
         self.ctrl_msg = BoosterControlCmd()
         self.obs_msg = Float32MultiArray()
         self.act_msg = Float32MultiArray()
         self.motor_msg = BoosterMotorCmd()
-        
+
         self.logger.info("ROS2 logging initialized")
 
     def _low_state_handler(self, low_state_msg: LowState):
@@ -112,8 +124,15 @@ class Controller:
             self.running = False
         self.timer.tick_timer_if_sim()
         time_now = self.timer.get_time()
+
         for i, motor in enumerate(low_state_msg.motor_state_serial):
             self.dof_pos_latest[i] = motor.q
+            self.dof_tau_est[i] = motor.tau_est
+
+        self.imu_rpy[:] = low_state_msg.imu_state.rpy
+        self.imu_gyro[:] = low_state_msg.imu_state.gyro
+        self.imu_acc[:] = low_state_msg.imu_state.acc
+
         if time_now >= self.next_inference_time:
             self.projected_gravity[:] = rotate_vector_inverse_rpy(
                 low_state_msg.imu_state.rpy[0],
@@ -130,12 +149,12 @@ class Controller:
         self.low_cmd_publisher.Write(cmd)
 
     def cleanup(self) -> None:
-        """Cleanup resources."""
+        self.data_logger.save()
         self.remoteControlService.close()
-        # Shutdown ROS2
-        if rclpy.ok():
-            self.ros_node.destroy_node()
-            rclpy.shutdown()
+        if ENABLE_ROS2_LOGGING:
+            if rclpy.ok():
+                self.ros_node.destroy_node()
+                rclpy.shutdown()
         if hasattr(self, "low_cmd_publisher"):
             self.low_cmd_publisher.CloseChannel()
         if hasattr(self, "low_state_subscriber"):
@@ -199,19 +218,27 @@ class Controller:
 
         inference_time = time.perf_counter()
         self.logger.debug(f"Inference took {(inference_time - start_time)*1000:.4f} ms")
-        
-        # Publish to ROS2 for logging (minimal overhead, pre-allocated messages)
-        self.ctrl_msg.vx = self.remoteControlService.get_vx_cmd()
-        self.ctrl_msg.vy = self.remoteControlService.get_vy_cmd()
-        self.ctrl_msg.vyaw = self.remoteControlService.get_vyaw_cmd()
-        self.pub_control_cmd.publish(self.ctrl_msg)
-        
-        self.obs_msg.data = self.policy.obs.tolist()
-        self.pub_policy_obs.publish(self.obs_msg)
-        
-        self.act_msg.data = self.policy.actions.tolist()
-        self.pub_policy_actions.publish(self.act_msg)
-        
+
+        # CSV logging
+        vx = self.remoteControlService.get_vx_cmd()
+        vy = self.remoteControlService.get_vy_cmd()
+        vyaw = self.remoteControlService.get_vyaw_cmd()
+        self.data_logger.log_command(vx, vy, vyaw)
+        self.data_logger.log_policy(self.policy.obs, self.policy.actions)
+        self.data_logger.log_imu(self.imu_rpy, self.imu_gyro, self.imu_acc)
+
+        if ENABLE_ROS2_LOGGING:
+            self.ctrl_msg.vx = vx
+            self.ctrl_msg.vy = vy
+            self.ctrl_msg.vyaw = vyaw
+            self.pub_control_cmd.publish(self.ctrl_msg)
+
+            self.obs_msg.data = self.policy.obs.tolist()
+            self.pub_policy_obs.publish(self.obs_msg)
+
+            self.act_msg.data = self.policy.actions.tolist()
+            self.pub_policy_actions.publish(self.act_msg)
+
         time.sleep(0.001)
 
     def _publish_cmd(self):
@@ -229,7 +256,6 @@ class Controller:
             for i in range(B1JointCnt):
                 motor_cmd[i].q = self.filtered_dof_target[i]
 
-            # Use series-parallel conversion for torque to avoid non-linearity
             for i in self.cfg["mech"]["parallel_mech_indexes"]:
                 motor_cmd[i].q = self.dof_pos_latest[i]
                 motor_cmd[i].tau = np.clip(
@@ -239,13 +265,25 @@ class Controller:
                 )
                 motor_cmd[i].kp = 0.0
 
-            # Publish motor command to ROS2 for logging (pre-allocated message)
-            self.motor_msg.joint_positions = self.filtered_dof_target.tolist()
-            self.motor_msg.joint_velocities = [motor_cmd[i].dq for i in range(B1JointCnt)]
-            self.motor_msg.joint_torques = [motor_cmd[i].tau for i in range(B1JointCnt)]
-            self.motor_msg.joint_kp = [motor_cmd[i].kp for i in range(B1JointCnt)]
-            self.motor_msg.joint_kd = [motor_cmd[i].kd for i in range(B1JointCnt)]
-            self.pub_motor_cmd.publish(self.motor_msg)
+            # CSV logging
+            self.data_logger.log_joint_actual(
+                self.dof_pos_latest, self.dof_vel, self.dof_tau_est
+            )
+            self.data_logger.log_joint_commanded(
+                [motor_cmd[i].q for i in range(B1JointCnt)],
+                [motor_cmd[i].dq for i in range(B1JointCnt)],
+                [motor_cmd[i].tau for i in range(B1JointCnt)],
+                [motor_cmd[i].kp for i in range(B1JointCnt)],
+                [motor_cmd[i].kd for i in range(B1JointCnt)],
+            )
+
+            if ENABLE_ROS2_LOGGING:
+                self.motor_msg.joint_positions = self.filtered_dof_target.tolist()
+                self.motor_msg.joint_velocities = [motor_cmd[i].dq for i in range(B1JointCnt)]
+                self.motor_msg.joint_torques = [motor_cmd[i].tau for i in range(B1JointCnt)]
+                self.motor_msg.joint_kp = [motor_cmd[i].kp for i in range(B1JointCnt)]
+                self.motor_msg.joint_kd = [motor_cmd[i].kd for i in range(B1JointCnt)]
+                self.pub_motor_cmd.publish(self.motor_msg)
 
             start_time = time.perf_counter()
             self._send_cmd(self.low_cmd)
@@ -264,7 +302,6 @@ if __name__ == "__main__":
     import argparse
     import signal
     import sys
-    import os
 
     def signal_handler(sig, frame):
         print("\nShutting down...")
@@ -278,11 +315,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     cfg_file = os.path.join("deploy", "configs", args.config)
 
+    task_name = os.path.splitext(args.config)[0]
+
     print(f"Starting custom controller, connecting to {args.net} ...")
     ChannelFactory.Instance().Init(0, args.net)
 
-    with Controller(cfg_file) as controller:
-        time.sleep(2)  # Wait for channels to initialize
+    with Controller(cfg_file, task_name=task_name) as controller:
+        time.sleep(2)
         print("Initialization complete.")
         controller.start_custom_mode_conditionally()
         controller.start_rl_gait_conditionally()

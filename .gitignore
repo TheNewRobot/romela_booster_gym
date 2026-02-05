@@ -5,6 +5,7 @@
 /logs
 /exps
 deploy/models/
+deploy/data
 tests/sim2real/data/
 
 __pycache__/
