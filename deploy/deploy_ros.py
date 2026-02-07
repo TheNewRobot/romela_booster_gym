@@ -236,7 +236,6 @@ class Controller:
             dof_vel=self.dof_vel,
             dof_tau_est=self.dof_tau_est,
             dof_target=self.filtered_dof_target,
-            dof_temperature=self.dof_temperature,
             actions=self.policy.actions,
         )
 

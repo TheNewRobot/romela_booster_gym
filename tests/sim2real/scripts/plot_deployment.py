@@ -239,18 +239,6 @@ def compute_stats(df, t_start, t_end):
             lines.append(f"  {side}_{joint_name:<18s} {rms:8.3f} {peak:8.3f}")
     lines.append("")
 
-    # Motor temperature
-    lines.append("Motor Temperature (°C):")
-    lines.append(f"  {'Joint':<20s} {'Start':>8s} {'Peak':>8s} {'Final':>8s}")
-    for indices, side in [(LEFT_LEG_INDICES, "L"), (RIGHT_LEG_INDICES, "R")]:
-        for joint_idx, joint_name in zip(indices, LEG_JOINT_NAMES):
-            temp_col = f"temp_{joint_idx}"
-            if temp_col not in df.columns:
-                continue
-            vals = df[temp_col].values
-            lines.append(f"  {side}_{joint_name:<18s} {vals[0]:8.1f} {vals.max():8.1f} {vals[-1]:8.1f}")
-    lines.append("")
-
     # Action smoothness
     act_cols = [c for c in df.columns if c.startswith("action_")]
     if act_cols:
@@ -303,9 +291,6 @@ def main():
 
     plot_overview(df, t_start,
                   os.path.join(folder, "overview.png"), args.show)
-
-    plot_temperature(df, t_start,
-                     os.path.join(folder, "temperature.png"), args.show)
 
     # Stats
     print("Computing stats...")

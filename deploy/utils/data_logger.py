@@ -29,7 +29,6 @@ class DataLogger:
         header += [f"dq_act_{i}" for i in range(num_joints)]
         header += [f"tau_est_{i}" for i in range(num_joints)]
         header += [f"q_cmd_{i}" for i in range(num_joints)]
-        header += [f"temp_{i}" for i in range(num_joints)]
         header += [f"action_{i}" for i in range(num_actions)]
 
         filepath = os.path.join(output_dir, "deployment_log.csv")
@@ -44,7 +43,7 @@ class DataLogger:
         return time.perf_counter() - self.start_time
 
     def log(self, vx, vy, vyaw, imu_rpy, imu_gyro, imu_acc,
-            dof_pos, dof_vel, dof_tau_est, dof_target, dof_temperature, actions):
+            dof_pos, dof_vel, dof_tau_est, dof_target, actions):
         row = [self._ts(), vx, vy, vyaw]
         row += list(imu_rpy)
         row += list(imu_gyro)
@@ -53,7 +52,6 @@ class DataLogger:
         row += list(dof_vel)
         row += list(dof_tau_est)
         row += list(dof_target)
-        row += list(dof_temperature)
         row += list(actions)
         self.writer.writerow([f"{v:.6f}" for v in row])
         self.row_count += 1

@@ -60,19 +60,29 @@ To show world axes: **Tab** → Rendering → Frame → World
    - **Simulation:** Follow [Webots setup](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-IsE9d2DrIow8tpxCBUUcogdwn5d) or [Isaac setup](https://booster.feishu.cn/wiki/DtFgwVXYxiBT8BksUPjcOwG4n4f#share-Jczjd4UKMou7QlxjvJ4c9NNfnwb)
    - **Real robot:** Power on, switch to PREP mode (RT + Y), place on stable ground
 
-2. **Run deployment:**
+2. **Run deployment (basic, no logging):**
    ```bash
    cd deploy
-   python deploy.py --config=T1.yaml
+   python deploy.py --config=T1.yaml --net=192.168.10.102
+   ```
+
+3. **Run deployment (with CSV logging):**
+   ```bash
+   cd deploy
+   python deploy_ros.py --config=T1.yaml --net=192.168.10.102
    ```
 
    Options:
    - `--config` — Config file in `configs/` folder
-   - `--net` — Network interface (default: `127.0.0.1`, use robot IP for real hardware), we have been using --net=192.168.10.102 when deployed from tegra
+   - `--net` — Network interface (default: `127.0.0.1`, use `192.168.10.102` from tegra)
 
-3. **Exit safely:**
-   - Switch to PREP mode (RT + Y) before terminating the script
-   - Never kill the script while robot is in motion
+4. **Safe exit protocol:**
+   - Stop commands (press Space)
+   - Switch to PREP mode (RT + Y)
+   - Kill terminal inmediately (Ctrl+C)
+   - Raise the robot 
+   - **Never kill the script while robot is in motion**
+> **Note** : If the robot finishes in a position that has the legs opened up the motors might overheat when it tries to restore it's PREP position (Heads up!)
 
 ## Configuration
 
@@ -83,45 +93,58 @@ Key parameters:
 - PD gains (kp, kd)
 - Joint limits and safety bounds
 - Default pose
+- Parallel mechanism ankle indices
 
-### Data Logging
+## Data Logging
 
-`deploy_ros.py` automatically logs CSV data to `deploy/data/<config_name>/<timestamp>/`.
+`deploy_ros.py` streams a single CSV at ~50Hz to `deploy/data/<config>/<experiment>/deployment_log.csv`. Data is flushed to disk continuously — survives Ctrl+C or terminal kill with no data loss.
 
-ROS2 logging is off by default. Set `ENABLE_ROS2_LOGGING = True` in `deploy_ros.py` to re-enable.
+ROS2 logging is off by default. Set `ENABLE_ROS2_LOGGING = True` in `deploy_ros.py` to re-enable (requires ROS2 workspace sourced).
 
-**Files generated per run:**
+**CSV columns (117 per row):**
 
-| File | Rate | Contents |
-|------|------|----------|
-| `commands.csv` | ~50Hz | vx, vy, vyaw |
-| `joint_states_actual.csv` | 500Hz | q, dq, tau_est (23 joints) |
-| `joint_states_commanded.csv` | 500Hz | q, dq, tau, kp, kd (23 joints) |
-| `imu.csv` | ~50Hz | rpy, gyro, acc |
-| `policy_obs.csv` | ~50Hz | 47-dim observation |
-| `policy_actions.csv` | ~50Hz | 12-dim actions |
+| Group | Columns | Count |
+|-------|---------|-------|
+| Timestamp | `timestamp` | 1 |
+| Commands | `vx`, `vy`, `vyaw` | 3 |
+| IMU orientation | `roll`, `pitch`, `yaw` | 3 |
+| IMU gyro | `gyro_x`, `gyro_y`, `gyro_z` | 3 |
+| IMU accelerometer | `acc_x`, `acc_y`, `acc_z` | 3 |
+| Joint positions (actual) | `q_act_0` .. `q_act_22` | 23 |
+| Joint velocities (actual) | `dq_act_0` .. `dq_act_22` | 23 |
+| Joint torques (estimated) | `tau_est_0` .. `tau_est_22` | 23 |
+| Joint positions (commanded) | `q_cmd_0` .. `q_cmd_22` | 23 |
+| Policy actions | `action_0` .. `action_11` | 12 |
 
-### Analyze Deployment
+The first line is a comment with the policy name: `# policy: <model_filename>`
+
+**Output directory structure:**
+```
+deploy/data/T1/
+  deploy_log_obs_2026-02-08_04-59-30/
+    deployment_log.csv
+```
+
+## Analyze Deployment
 
 ```bash
-python tests/sim2real/scripts/plot_deployment.py --data deploy/data/T1/
+python tests/sim2real/scripts/plot_deployment.py --data deploy/data/T1/deploy_log_obs_2026-02-08_04-59-30
 ```
 
 Options:
 - `--show` — interactive matplotlib viewer
 - `--no-trim` — include standing-still regions
 
-Outputs (saved to same folder):
-- `tracking_left_leg.png` / `tracking_right_leg.png` — position tracking + torques per joint
-- `overview.png` — commands, vyaw vs gyro_z, IMU
-- `stats.txt` — RMS/peak tracking error, torque stats, action smoothness
+Outputs (saved to experiment folder):
+- `tracking_left_leg.png` / `tracking_right_leg.png` — position tracking (cmd vs actual) + estimated torques per joint
+- `overview.png` — commands timeline, vyaw vs gyro_z, IMU rpy, IMU gyro
+- `stats.txt` — per-joint RMS/peak tracking error, torque stats, action smoothness, yaw rate tracking
 
-## Configuration
+### Joint Reference
 
-Deployment config: `deploy/configs/T1.yaml`
+| Leg | Indices | Joint Order |
+|-----|---------|-------------|
+| Left | 11–16 | Hip_Pitch, Hip_Roll, Hip_Yaw, Knee_Pitch, Ankle_Pitch, Ankle_Roll |
+| Right | 17–22 | Hip_Pitch, Hip_Roll, Hip_Yaw, Knee_Pitch, Ankle_Pitch, Ankle_Roll |
 
-Key parameters:
-- Policy path and observation/action specs
-- PD gains (kp, kd)
-- Joint limits and safety bounds
-- Default pose
+Parallel mechanism ankles: joints 15, 16, 21, 22 (torque control, bypass PD).
