@@ -55,9 +55,10 @@ class Controller:
         # CSV data logger
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        output_dir = os.path.join(script_dir, "data", task_name, timestamp)
-        self.data_logger = DataLogger(output_dir, num_joints=B1JointCnt)
-        self.logger.info(f"Policy: {self.cfg['policy']['policy_path']}")
+        output_dir = os.path.join(script_dir, "data", task_name, f"deploy_log_obs_{timestamp}")
+        policy_name = os.path.basename(self.cfg["policy"]["policy_path"])
+        self.data_logger = DataLogger(output_dir, num_joints=B1JointCnt, policy_name=policy_name)
+        self.logger.info(f"Policy: {policy_name}")
         self.logger.info(f"Data logger output: {output_dir}")
 
         if ENABLE_ROS2_LOGGING:

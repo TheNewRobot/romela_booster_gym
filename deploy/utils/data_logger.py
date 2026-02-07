@@ -10,7 +10,7 @@ class DataLogger:
     Data is flushed immediately so nothing is lost if the process is killed.
     """
 
-    def __init__(self, output_dir, num_joints=23, num_actions=12):
+    def __init__(self, output_dir, num_joints=23, num_actions=12, policy_name=""):
         self.output_dir = output_dir
         self.num_joints = num_joints
         self.num_actions = num_actions
@@ -35,6 +35,7 @@ class DataLogger:
         filepath = os.path.join(output_dir, "deployment_log.csv")
         self.file = open(filepath, "w", newline="")
         self.writer = csv.writer(self.file)
+        self.file.write(f"# policy: {policy_name}\n")
         self.writer.writerow(header)
         self.file.flush()
         self.logger.info(f"Logging to {filepath}")
