@@ -22,9 +22,9 @@ from utils.remote_control_service import RemoteControlService
 from utils.rotate import rotate_vector_inverse_rpy
 from utils.timer import TimerConfig, Timer
 from utils.policy import Policy
-from deploy.utils.data_logger import DataLogger
+from utils.data_logger import DataLogger
 
-ENABLE_ROS2_LOGGING = True
+ENABLE_ROS2_LOGGING = False
 
 if ENABLE_ROS2_LOGGING:
     import rclpy
@@ -54,8 +54,10 @@ class Controller:
 
         # CSV data logger
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_dir = os.path.join("deploy", "data", task_name, timestamp)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_dir = os.path.join(script_dir, "data", task_name, timestamp)
         self.data_logger = DataLogger(output_dir, num_joints=B1JointCnt)
+        self.logger.info(f"Policy: {self.cfg['policy']['policy_path']}")
         self.logger.info(f"Data logger output: {output_dir}")
 
         if ENABLE_ROS2_LOGGING:
@@ -78,6 +80,7 @@ class Controller:
 
         # Logging buffers
         self.dof_tau_est = np.zeros(B1JointCnt, dtype=np.float32)
+        self.dof_temperature = np.zeros(B1JointCnt, dtype=np.float32)
         self.imu_rpy = np.zeros(3, dtype=np.float32)
         self.imu_gyro = np.zeros(3, dtype=np.float32)
         self.imu_acc = np.zeros(3, dtype=np.float32)
@@ -128,6 +131,7 @@ class Controller:
         for i, motor in enumerate(low_state_msg.motor_state_serial):
             self.dof_pos_latest[i] = motor.q
             self.dof_tau_est[i] = motor.tau_est
+            self.dof_temperature[i] = motor.temperature
 
         self.imu_rpy[:] = low_state_msg.imu_state.rpy
         self.imu_gyro[:] = low_state_msg.imu_state.gyro
@@ -219,15 +223,27 @@ class Controller:
         inference_time = time.perf_counter()
         self.logger.debug(f"Inference took {(inference_time - start_time)*1000:.4f} ms")
 
-        # CSV logging
-        vx = self.remoteControlService.get_vx_cmd()
-        vy = self.remoteControlService.get_vy_cmd()
-        vyaw = self.remoteControlService.get_vyaw_cmd()
-        self.data_logger.log_command(vx, vy, vyaw)
-        self.data_logger.log_policy(self.policy.obs, self.policy.actions)
-        self.data_logger.log_imu(self.imu_rpy, self.imu_gyro, self.imu_acc)
+        # CSV logging — single row, flushed to disk
+        self.data_logger.log(
+            vx=self.remoteControlService.get_vx_cmd(),
+            vy=self.remoteControlService.get_vy_cmd(),
+            vyaw=self.remoteControlService.get_vyaw_cmd(),
+            imu_rpy=self.imu_rpy,
+            imu_gyro=self.imu_gyro,
+            imu_acc=self.imu_acc,
+            dof_pos=self.dof_pos_latest,
+            dof_vel=self.dof_vel,
+            dof_tau_est=self.dof_tau_est,
+            dof_target=self.filtered_dof_target,
+            dof_temperature=self.dof_temperature,
+            actions=self.policy.actions,
+        )
 
         if ENABLE_ROS2_LOGGING:
+            vx = self.remoteControlService.get_vx_cmd()
+            vy = self.remoteControlService.get_vy_cmd()
+            vyaw = self.remoteControlService.get_vyaw_cmd()
+
             self.ctrl_msg.vx = vx
             self.ctrl_msg.vy = vy
             self.ctrl_msg.vyaw = vyaw
@@ -265,18 +281,6 @@ class Controller:
                 )
                 motor_cmd[i].kp = 0.0
 
-            # CSV logging
-            self.data_logger.log_joint_actual(
-                self.dof_pos_latest, self.dof_vel, self.dof_tau_est
-            )
-            self.data_logger.log_joint_commanded(
-                [motor_cmd[i].q for i in range(B1JointCnt)],
-                [motor_cmd[i].dq for i in range(B1JointCnt)],
-                [motor_cmd[i].tau for i in range(B1JointCnt)],
-                [motor_cmd[i].kp for i in range(B1JointCnt)],
-                [motor_cmd[i].kd for i in range(B1JointCnt)],
-            )
-
             if ENABLE_ROS2_LOGGING:
                 self.motor_msg.joint_positions = self.filtered_dof_target.tolist()
                 self.motor_msg.joint_velocities = [motor_cmd[i].dq for i in range(B1JointCnt)]
@@ -313,7 +317,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", required=True, type=str, help="Name of the configuration file.")
     parser.add_argument("--net", type=str, default="127.0.0.1", help="Network interface for SDK communication.")
     args = parser.parse_args()
-    cfg_file = os.path.join("deploy", "configs", args.config)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    cfg_file = os.path.join(script_dir, "configs", args.config)
 
     task_name = os.path.splitext(args.config)[0]
 
