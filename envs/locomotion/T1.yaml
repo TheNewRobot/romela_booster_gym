@@ -1,12 +1,12 @@
 basic:
   checkpoint: null # set to -1 to load last saved model
   headless: false
-  max_iterations: 5000 # set the maximum number of learning iterations to train for
+  max_iterations: 10000 # set the maximum number of learning iterations to train for
   sim_device: "cuda:0" # device for physics simulation
   rl_device: "cuda:0" # device for the RL algorithm
   seed: 42 # seed - set to -1 to choose random seed
-  description: "Tested the values from joint fricton, damping and armature "
-  name: "t1_locomotion_policy_height_sysID_values"
+  description: "Config5 was successful - now trying to fix the hip roll problem"
+  name: "t1_locomotion_policy_height_config5"
 
 env:
   num_envs: 4096
@@ -18,7 +18,7 @@ env:
 runner:
   horizon_length: 24
   mini_epochs: 20
-  save_interval: 500
+  save_interval: 1000
   use_wandb: true
 
 viewer: 
@@ -187,7 +187,7 @@ randomization:
 
   kick_interval_s: 2.
   kick_lin_vel:
-    range: [0., 0.1]
+    range: [0., 0.3]
     operation: "additive"
     distribution: "gaussian"
   kick_ang_vel:
@@ -198,11 +198,11 @@ randomization:
   push_interval_s: 5.
   push_duration_s: 1.
   push_force:
-    range: [0., 10.]
+    range: [0., 30.]
     operation: "additive"
     distribution: "gaussian"
   push_torque:
-    range: [0., 2.]
+    range: [0., 5.]
     operation: "additive"
     distribution: "gaussian"
 
@@ -252,12 +252,12 @@ randomization:
 rewards:
   scales:
     survival: 0.25
-    tracking_lin_vel_x: 1.0
-    tracking_lin_vel_y: 1.0
-    tracking_ang_vel: 0.5
+    tracking_lin_vel_x: 2.5
+    tracking_lin_vel_y: 2.5
+    tracking_ang_vel: 1.5
     base_height: -20.
     orientation: -5.
-    torques: -2.e-4
+    torques: -4.e-4
     torque_tiredness: -1.e-2
     power: -2.e-3
     lin_vel_z: -2.
@@ -265,7 +265,7 @@ rewards:
     dof_vel: -1.e-4
     dof_acc: -1.e-7
     root_acc: -1.e-4
-    action_rate: -1.
+    action_rate: -2.
     dof_pos_limits: -1.
     dof_vel_limits: -0.
     torque_limits: -0.
@@ -283,7 +283,7 @@ rewards:
   terminate_contacts_on: []
   penalize_contacts_on: ["Trunk", "H1", "H2", "AL", "AR", "Waist", "Hip", "Shank", "Ankle"]
   only_positive_rewards: true # if true negative total rewards are clipped at zero (avoids early termination problems)
-  tracking_sigma: 0.25 # tracking reward = exp(-error^2/sigma)
+  tracking_sigma: 0.12 # tracking reward = exp(-error^2/sigma)
   base_height_target: 0.68
   soft_dof_pos_limit: 1. # percentage of urdf limits, values above this limit are penalized
   soft_dof_vel_limit: 1.
@@ -292,5 +292,5 @@ rewards:
   feet_distance_ref: 0.2
 
 sim_params:
-  use_calibrated: true
+  use_calibrated: false
   path: "tests/sim2real/config/sim_params.yaml"
