@@ -275,7 +275,7 @@ rewards:
     feet_yaw_diff: -1.
     feet_yaw_mean: -1.
     feet_roll: -0.1
-    feet_distance: -1.
+    feet_distance: 1.
     feet_swing: 3.
   episode_length_s: 30.
   terminate_height: 0.45
@@ -290,6 +290,7 @@ rewards:
   soft_torque_limit: 1.
   swing_period: 0.2
   feet_distance_ref: 0.2
+  feet_distance_sigma: 0.01
 
 sim_params:
   use_calibrated: false
