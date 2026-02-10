@@ -742,12 +742,13 @@ class T1(BaseTask):
         return torch.square((get_euler_xyz(self.base_quat)[2] - feet_yaw_mean + torch.pi) % (2 * torch.pi) - torch.pi)
 
     def _reward_feet_distance(self):
-        _, _, base_yaw = get_euler_xyz(self.base_quat)
-        feet_distance = torch.abs(
-            torch.cos(base_yaw) * (self.feet_pos[:, 1, 1] - self.feet_pos[:, 0, 1])
-            - torch.sin(base_yaw) * (self.feet_pos[:, 1, 0] - self.feet_pos[:, 0, 0])
-        )
-        return torch.clip(self.cfg["rewards"]["feet_distance_ref"] - feet_distance, min=0.0, max=0.1)
+      _, _, base_yaw = get_euler_xyz(self.base_quat)
+      feet_distance = torch.abs(
+          torch.cos(base_yaw) * (self.feet_pos[:, 1, 1] - self.feet_pos[:, 0, 1])
+          - torch.sin(base_yaw) * (self.feet_pos[:, 1, 0] - self.feet_pos[:, 0, 0])
+      )
+      return torch.exp(-torch.square(feet_distance - self.cfg["rewards"]["feet_distance_ref"])
+                       / self.cfg["rewards"]["feet_distance_sigma"])
 
     def _reward_feet_swing(self):
         left_swing = (torch.abs(self.gait_process - 0.25) < 0.5 * self.cfg["rewards"]["swing_period"]) & (self.gait_frequency > 1.0e-8)
