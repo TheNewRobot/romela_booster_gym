@@ -316,6 +316,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, type=str, help="Name of the configuration file.")
     parser.add_argument("--net", type=str, default="127.0.0.1", help="Network interface for SDK communication.")
+    parser.add_argument("--profile", type=str, default=None, help="Velocity profile name from command_profiles.yaml (e.g. walk_forward)")
     args = parser.parse_args()
     script_dir = os.path.dirname(os.path.abspath(__file__))
     cfg_file = os.path.join(script_dir, "configs", args.config)
@@ -330,6 +331,19 @@ if __name__ == "__main__":
         print("Initialization complete.")
         controller.start_custom_mode_conditionally()
         controller.start_rl_gait_conditionally()
+
+        if args.profile:
+            profiles_path = os.path.join(script_dir, "configs", "command_profiles.yaml")
+            with open(profiles_path) as f:
+                profiles = yaml.safe_load(f)
+            if args.profile not in profiles["profiles"]:
+                print(f"Error: profile '{args.profile}' not found. Available: {list(profiles['profiles'].keys())}")
+                sys.exit(1)
+            from utils.command_profile_player import CommandProfilePlayer
+            player = CommandProfilePlayer(controller.remoteControlService, profiles["profiles"][args.profile])
+            controller.data_logger.file.write(f"# profile: {args.profile}\n")
+            controller.data_logger.file.flush()
+            player.start()
 
         try:
             while controller.running:

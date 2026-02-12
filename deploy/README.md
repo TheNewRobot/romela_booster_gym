@@ -84,6 +84,42 @@ To show world axes: **Tab** → Rendering → Frame → World
    - **Never kill the script while robot is in motion**
 > **Note** : If the robot finishes in a position that has the legs opened up the motors might overheat when it tries to restore it's PREP position (Heads up!)
 
+## Velocity Profiles
+
+Run reproducible velocity command sequences for benchmarking policies:
+
+```bash
+# Profiled run — settle → segments → stop → damp → exit
+cd deploy
+python deploy_ros.py --config=T1.yaml --net=192.168.10.102 --profile walk_forward
+
+# No profile — keyboard/gamepad as before
+python deploy_ros.py --config=T1.yaml --net=192.168.10.102
+```
+
+Profiles are defined in `deploy/configs/command_profiles.yaml`. Each profile is a list of `{vx, vy, vyaw, duration}` segments:
+
+```yaml
+profiles:
+  walk_forward:
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
+    - {vx: 0.3, vy: 0.0, vyaw: 0.0, duration: 5.0}   # walk
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # stop
+```
+
+**Available profiles:** `stand`, `walk_forward`, `walk_backward`, `strafe_left`, `strafe_right`, `turn_left`, `turn_right`, `mixed`
+
+**Execution flow:**
+1. Robot initializes and enters RL gait mode
+2. 2s settle at zero velocity (automatic)
+3. Profile segments play in order
+4. After the last segment, the profile thread ends — the main loop keeps running as normal
+5. Stop the robot manually as usual (Ctrl+C, gamepad damp, etc.)
+
+**Safety:** All existing safety mechanisms remain active during profiled runs (IMU tilt check, torque limits, gamepad e-stop). The profile only sets velocity commands — it does not modify the control loop.
+
+The deployment CSV automatically logs `# profile: <name>` in the header and records vx/vy/vyaw at every timestep, enabling A/B comparison across policies with identical inputs.
+
 ## Configuration
 
 Deployment config: `deploy/configs/T1.yaml`
