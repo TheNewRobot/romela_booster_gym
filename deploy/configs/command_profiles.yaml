@@ -1,6 +1,10 @@
-# Velocity command profiles for sim2real testing
+# Velocity command profiles for deployment benchmarking
 # Each profile is a list of segments: {vx, vy, vyaw, duration}
 # Units: m/s for vx/vy, rad/s for vyaw, seconds for duration
+# Note: transitions between segments are automatically ramped (0.2 m/s per second)
+# After the last segment, velocity always ramps down to zero and stays there
+#
+# Usage: python deploy/deploy_ros.py --config=T1.yaml --profile walk_forward
 
 profiles:
   stand:
@@ -8,40 +12,30 @@ profiles:
 
   walk_forward:
     - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
-    - {vx: 0.3, vy: 0.0, vyaw: 0.0, duration: 5.0}   # walk
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # stop
+    - {vx: 0.3, vy: 0.0, vyaw: 0.0, duration: 5.0}
 
   walk_backward:
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
     - {vx: -0.3, vy: 0.0, vyaw: 0.0, duration: 5.0}
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
 
   strafe_left:
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
     - {vx: 0.0, vy: 0.2, vyaw: 0.0, duration: 5.0}
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
 
   strafe_right:
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
     - {vx: 0.0, vy: -0.2, vyaw: 0.0, duration: 5.0}
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
 
   turn_left:
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
     - {vx: 0.0, vy: 0.0, vyaw: 0.3, duration: 5.0}
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
 
   turn_right:
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
+    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
     - {vx: 0.0, vy: 0.0, vyaw: -0.3, duration: 5.0}
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}
 
   mixed:
     - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # settle
     - {vx: 0.3, vy: 0.0, vyaw: 0.0, duration: 3.0}   # forward
     - {vx: 0.3, vy: 0.1, vyaw: 0.0, duration: 3.0}   # forward + strafe
     - {vx: 0.2, vy: 0.0, vyaw: 0.2, duration: 3.0}   # forward + turn
-    - {vx: 0.0, vy: 0.0, vyaw: 0.0, duration: 2.0}   # stop
-
-defaults:
-  control_dt: 0.02  # 50 Hz, matches policy frequency
