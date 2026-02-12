@@ -45,12 +45,12 @@ def compare_joint(
     real_pos = joint_data.actual_positions[::subsample]
     real_vel = joint_data.actual_velocities[::subsample]
     times = joint_data.timestamps[::subsample]
-    
+
     # Simulate
     sim_pos, sim_vel = simulate_joint_response(
         mj_model, dof_idx, cmd,
         joint_data.kp, joint_data.kd,
-        initial_pos=real_pos[0]
+        initial_pos=real_pos[0], timestamps=times
     )
     
     # Metrics
@@ -160,13 +160,14 @@ def plot_summary(all_metrics: Dict[int, Dict], output_path: Path):
 def main():
     parser = argparse.ArgumentParser(description='Compare sim vs real joint responses')
     parser.add_argument('--experiment', required=True, help='Experiment name')
+    parser.add_argument('--run-name', required=True, help='Name for this comparison run (e.g. default_params, optimized_all)')
     parser.add_argument('--robot-config', default='deploy/configs/T1.yaml')
     parser.add_argument('--mujoco-xml', default='resources/T1/T1_locomotion.xml')
     parser.add_argument('--sim-params', default='tests/sim2real/config/sim_params.yaml')
     args = parser.parse_args()
-    
+
     exp_dir = Path('tests/sim2real/data') / args.experiment
-    plots_dir = exp_dir / 'plots' / 'comparison'
+    plots_dir = exp_dir / 'plots' / 'comparison' / args.run_name
     plots_dir.mkdir(parents=True, exist_ok=True)
     
     # Validate
@@ -179,6 +180,7 @@ def main():
     print(f"Sim vs Real Comparison")
     print(f"{'='*60}")
     print(f"Experiment: {args.experiment}")
+    print(f"Run: {args.run_name}")
     
     # Load configs
     with open(args.robot_config) as f:
@@ -221,13 +223,16 @@ def main():
     
     # Summary plot
     plot_summary(all_metrics, plots_dir / 'comparison_summary.png')
-    
-    # Save metrics CSV
+
+    # Save metrics CSV alongside the plots
+    results_dir = exp_dir / 'results'
+    results_dir.mkdir(parents=True, exist_ok=True)
     metrics_df = pd.DataFrame([
         {'joint': j, 'name': LEG_JOINT_NAMES.get(j, f'J{j}'), **m}
         for j, m in sorted(all_metrics.items())
     ])
-    metrics_df.to_csv(exp_dir / 'comparison_metrics.csv', index=False)
+    metrics_path = results_dir / f'{args.run_name}.csv'
+    metrics_df.to_csv(metrics_path, index=False)
     
     # Summary
     print(f"\n{'='*60}")
@@ -245,7 +250,7 @@ def main():
     print(f"{'AVG':<6} {'':<20} {avg_rmse:<10.4f} {avg_corr:<12.3f}")
     
     print(f"\nPlots saved to: {plots_dir}")
-    print(f"Metrics saved to: {exp_dir / 'comparison_metrics.csv'}")
+    print(f"Metrics saved to: {metrics_path}")
 
 
 if __name__ == '__main__':
