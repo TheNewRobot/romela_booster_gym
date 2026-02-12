@@ -7,8 +7,8 @@ Tune MuJoCo simulation parameters (damping, armature, frictionloss) to match rea
 The pipeline has three stages:
 
 1. **Data Collection** — Record joint responses on real robot (hanging, no ground contact)
-2. **Optimization** — Find simulation parameters that minimize error vs real data
-3. **Comparison** — Validate tuned simulation against real trajectories
+2. **Optimization** — Find simulation parameters that minimize position error vs real data (Nelder-Mead, gradient-free)
+3. **Comparison** — Validate tuned simulation against real trajectories, saved as named runs for A/B comparison
 
 ## Quick Start
 
@@ -16,15 +16,32 @@ The pipeline has three stages:
 # 1. Collect data (on robot)
 python tests/sim2real/scripts/sysid_joint_dynamics.py --config=T1.yaml --net=192.168.10.102
 
-# 2. Visualize real data
+# 2. Visualize real data (optional, for data quality check)
 python tests/sim2real/scripts/plot_joint_response.py --experiment hanging_test_00
 
-# 3. Optimize parameters
-python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00 --iterations 1000 --lr 0.1
+# 3. Baseline comparison (before optimization)
+python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00 --run-name default_params
 
-# 4. Compare sim vs real
-python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00
+# 4. Optimize parameters (all joints, ~10 min)
+python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00
+
+# 5. Compare with optimized params
+python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00 --run-name optimized_all
 ```
+
+### Optimizing a single joint
+
+```bash
+python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00 --joint 15
+```
+
+### Using calibrated params in MuJoCo play
+
+```bash
+python scripts/play_mujoco.py --task=T1 --policy=deploy/models/T1/<exp>.pt --sim-params
+```
+
+Without `--sim-params`, `play_mujoco.py` uses raw XML defaults (zero damping/armature/frictionloss).
 
 ## Data Collection
 
@@ -74,38 +91,65 @@ CSV columns: `timestamp, test_type, test_param, cmd_position, actual_position, a
 
 ## Optimization
 
-Gradient descent on MuJoCo parameters to match real joint responses.
+Nelder-Mead (gradient-free simplex) optimization on MuJoCo parameters to match real joint responses. Physical bounds are enforced to keep parameters in stable ranges.
 
 ```bash
-python tests/sim2real/scripts/optimize_joint_dynamics.py \
-    --experiment hanging_test_00 \
-    --iterations 500 \
-    --lr 0.005
+# All joints
+python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00
+
+# Single joint
+python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00 --joint 15
+
+# Custom settings
+python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00 --maxfev 400 --subsample 3
 ```
 
 **Parameters optimized (per-joint):**
-- `damping` — Passive joint damping
-- `armature` — Reflected rotor inertia  
-- `frictionloss` — Dry friction
+| Parameter | Description | Bounds |
+|-----------|-------------|--------|
+| `damping` | Passive viscous joint damping | [0.1, 10.0] |
+| `armature` | Reflected rotor inertia | [0.001, 1.0] |
+| `frictionloss` | Dry (Coulomb) friction | [0.001, 2.0] |
 
-**Output:** `tests/sim2real/config/sim_params.yaml`
+**Output:** `tests/sim2real/config/sim_params.yaml` (merged — running `--joint` only updates that joint's entries)
+
+**Typical results (hanging_test_00):**
+- Hip joints: damping ~0.5, close to defaults (PD control dominates)
+- Yaw/Knee joints: damping 4-6, armature 0.1-0.35 (significant passive dynamics)
+- Ankle joints: frictionloss 0.3-2.0 (parallel mechanism adds friction)
 
 ## Comparison
 
-Validate tuned parameters by replaying commands in simulation:
+Validate tuned parameters by replaying commands in simulation. Each run is saved with a name for A/B comparison.
 
 ```bash
-python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00
+# Before optimization
+python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00 --run-name default_params
+
+# After optimization
+python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00 --run-name optimized_all
 ```
 
 **Output:**
-- Per-joint comparison plots: `plots/comparison/comparison_joint_*.png`
-- Summary plot: `plots/comparison/comparison_summary.png`
-- Metrics CSV: `comparison_metrics.csv`
+```
+tests/sim2real/data/hanging_test_00/
+├── results/
+│   ├── default_params.csv       # Metrics before optimization
+│   └── optimized_all.csv        # Metrics after optimization
+└── plots/comparison/
+    ├── default_params/          # Per-joint plots + summary
+    └── optimized_all/
+```
 
 **Target metrics:**
-- RMSE < 0.05 rad
-- Correlation > 0.8
+- RMSE < 0.02 rad (good), < 0.05 rad (acceptable)
+- Correlation > 0.95 (good), > 0.8 (acceptable)
+
+## Technical Notes
+
+- **Simulation timing:** The simulation respects real-world timestamps from the data — it runs the correct number of MuJoCo sub-steps between data points to match elapsed real time. This is critical for accurate comparison when subsampling.
+- **PD control masking:** Strong PD gains (kp=200 for hips) make some dynamics parameters hard to observe from position data alone. The optimizer finds the best fit within what position tracking can reveal.
+- **Ankle limitations:** The parallel mechanism (joints 15-16, 21-22) adds dynamics that 3 scalar parameters can't fully capture. Expect weaker fits for ankle joints.
 
 ## File Structure
 
@@ -113,22 +157,27 @@ python tests/sim2real/scripts/compare_sim_real.py --experiment hanging_test_00
 tests/sim2real/
 ├── config/
 │   ├── sysid_joint_dynamics.yaml  # Data collection config
-│   └── sim_params.yaml            # Optimized parameters (output)
+│   ├── sim_params.yaml            # Calibrated parameters (output, git-tracked)
+│   ├── comparison.yaml            # Comparison metrics config
+│   ├── command_profiles.yaml      # Velocity command profiles
+│   └── topics.yaml                # ROS topic mappings
 ├── data/
-│   └── hanging_test_00/           # Example experiment
+│   └── hanging_test_00/           # Experiment data
 │       ├── joint_*.csv            # Real robot data
-│       ├── comparison_metrics.csv
+│       ├── results/               # Named comparison metrics
 │       └── plots/
-│           ├── raw/               # Real data visualization
-│           └── comparison/        # Sim vs real plots
+│           ├── raw/               # Real data visualization (optional)
+│           └── comparison/        # Named sim vs real comparison runs
 ├── scripts/
 │   ├── sysid_joint_dynamics.py    # Data collection (on robot)
 │   ├── plot_joint_response.py     # Visualize real data
-│   ├── optimize_joint_dynamics.py # Parameter optimization
-│   └── compare_sim_real.py        # Validation
+│   ├── optimize_joint_dynamics.py # Parameter optimization (Nelder-Mead)
+│   ├── compare_sim_real.py        # Validation (named runs)
+│   └── plot_deployment.py         # Deployment diagnostics
 └── utils/
-    ├── joint_data_utils.py        # CSV loading
-    └── mujoco_utils.py            # MuJoCo simulation helpers
+    ├── joint_data_utils.py        # CSV loading, JointData container
+    ├── mujoco_utils.py            # MuJoCo simulation (time-aware stepping)
+    └── data_utils.py              # General data utilities
 ```
 
 ## Joint Reference

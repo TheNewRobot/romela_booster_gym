@@ -9,3 +9,7 @@ deploy/data
 tests/sim2real/data/
 
 __pycache__/
+
+MUJOCO_LOG.TXT
+.claudeignore
+CLAUDE.md

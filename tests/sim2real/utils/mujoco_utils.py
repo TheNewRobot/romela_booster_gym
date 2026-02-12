@@ -99,10 +99,11 @@ def simulate_joint_response(
     kp: float,
     kd: float,
     initial_pos: Optional[float] = None,
+    timestamps: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Simulate joint response to commanded positions using PD control.
-    
+
     Args:
         mj_model: MuJoCo model (with params already applied)
         joint_indices: Tuple of (qpos_idx, dof_idx) from get_joint_dof_indices
@@ -110,56 +111,72 @@ def simulate_joint_response(
         kp: Proportional gain
         kd: Derivative gain
         initial_pos: Initial joint position (default: first cmd)
-    
+        timestamps: Real-world timestamps (seconds, starting at 0). When
+            provided, the simulation runs the correct number of sub-steps
+            between data points to match real elapsed time.
+
     Returns:
         sim_positions: Simulated position trajectory
         sim_velocities: Simulated velocity trajectory
     """
     qpos_idx, dof_idx = joint_indices
-    
+
     data = mujoco.MjData(mj_model)
     mujoco.mj_resetData(mj_model, data)
-    
+
     # Fix base in hanging position (robot suspended in air)
     base_pos = np.array([0.0, 0.0, 1.0])  # 1m above ground
     base_quat = np.array([1.0, 0.0, 0.0, 0.0])  # upright (w,x,y,z)
     data.qpos[0:3] = base_pos
     data.qpos[3:7] = base_quat
     data.qvel[0:6] = 0.0  # no base velocity
-    
+
     # Set initial position (use qpos_idx)
     if initial_pos is not None:
         data.qpos[qpos_idx] = initial_pos
     else:
         data.qpos[qpos_idx] = cmd_positions[0]
-    
+
     mujoco.mj_forward(mj_model, data)
-    
-    n_steps = len(cmd_positions)
-    sim_positions = np.zeros(n_steps, dtype=np.float32)
-    sim_velocities = np.zeros(n_steps, dtype=np.float32)
-    
-    for i, cmd_pos in enumerate(cmd_positions):
-        # PD control (qpos for position, qvel for velocity)
-        pos_error = cmd_pos - data.qpos[qpos_idx]
-        vel = data.qvel[dof_idx]
-        tau = kp * pos_error - kd * vel
-        
-        # Apply torque (qfrc_applied uses dof_idx)
-        data.qfrc_applied[dof_idx] = tau
-        
-        # Step
-        mujoco.mj_step(mj_model, data)
-        
-        # Keep base fixed (simulate hanging robot)
-        data.qpos[0:3] = base_pos
-        data.qpos[3:7] = base_quat
-        data.qvel[0:6] = 0.0
-        
+
+    n_data = len(cmd_positions)
+    sim_positions = np.zeros(n_data, dtype=np.float32)
+    sim_velocities = np.zeros(n_data, dtype=np.float32)
+
+    dt_sim = mj_model.opt.timestep
+    cumulative_steps = 0
+
+    for i in range(n_data):
+        # Compute how many sim steps to take for this data point
+        if i > 0 and timestamps is not None:
+            target_steps = round(float(timestamps[i]) / dt_sim)
+            n_substeps = max(1, target_steps - cumulative_steps)
+        else:
+            n_substeps = 1
+
+        for _ in range(n_substeps):
+            # PD control (qpos for position, qvel for velocity)
+            pos_error = cmd_positions[i] - data.qpos[qpos_idx]
+            vel = data.qvel[dof_idx]
+            tau = kp * pos_error - kd * vel
+
+            # Apply torque (qfrc_applied uses dof_idx)
+            data.qfrc_applied[dof_idx] = tau
+
+            # Step
+            mujoco.mj_step(mj_model, data)
+
+            # Keep base fixed (simulate hanging robot)
+            data.qpos[0:3] = base_pos
+            data.qpos[3:7] = base_quat
+            data.qvel[0:6] = 0.0
+
+        cumulative_steps += n_substeps
+
         # Record
         sim_positions[i] = data.qpos[qpos_idx]
         sim_velocities[i] = data.qvel[dof_idx]
-    
+
     return sim_positions, sim_velocities
 
 
@@ -173,22 +190,23 @@ def simulate_joint_with_params(
     armature: float,
     frictionloss: float,
     initial_pos: Optional[float] = None,
+    timestamps: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Simulate joint response with specific dynamics parameters.
-    
+
     Temporarily modifies model params, simulates, then could restore
     (but we use a fresh model each time in optimization).
     """
     qpos_idx, dof_idx = joint_indices
-    
+
     # Apply params (dof_* arrays use dof_idx)
     mj_model.dof_damping[dof_idx] = damping
     mj_model.dof_armature[dof_idx] = armature
     mj_model.dof_frictionloss[dof_idx] = frictionloss
-    
+
     return simulate_joint_response(
-        mj_model, joint_indices, cmd_positions, kp, kd, initial_pos
+        mj_model, joint_indices, cmd_positions, kp, kd, initial_pos, timestamps
     )
 
 

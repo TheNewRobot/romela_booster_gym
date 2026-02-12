@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Differentiable System Identification for Joint Dynamics
+System Identification for Joint Dynamics
 
 Optimizes per-joint simulation parameters (damping, armature, frictionloss)
-to match real robot data using gradient descent.
+to match real robot data using Nelder-Mead optimization.
 
 Usage:
     python optimize_joint_dynamics.py --experiment hanging_test_01
-    python optimize_joint_dynamics.py --experiment hanging_test_01 --iterations 500 --lr 0.01
+    python optimize_joint_dynamics.py --experiment hanging_test_01 --joint 15
 """
 
 import os
@@ -21,14 +21,26 @@ from typing import Dict
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.optimize import minimize
 
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.joint_data_utils import load_all_joint_data, JointData
 from utils.mujoco_utils import (
-    load_mujoco_model, get_joint_dof_indices, 
+    load_mujoco_model, get_joint_dof_indices,
     simulate_joint_with_params, LEG_JOINT_NAMES
 )
+
+
+# Physical bounds in log-space
+# damping:      [0.1, 10.0]  → log: [-2.3, 2.3]
+# armature:     [0.001, 1.0] → log: [-6.9, 0.0]
+# frictionloss: [0.001, 2.0] → log: [-6.9, 0.7]
+BOUNDS_LOG = np.array([
+    [-2.3, 2.3],   # damping
+    [-6.9, 0.0],   # armature
+    [-6.9, 0.7],   # frictionloss
+])
 
 
 def optimize_single_joint(
@@ -36,80 +48,77 @@ def optimize_single_joint(
     joint_data: JointData,
     dof_idx: int,
     initial_params: Dict[str, float],
-    n_iterations: int = 500,
-    learning_rate: float = 0.01,
-    subsample: int = 10,
+    subsample: int = 5,
+    maxfev: int = 200,
 ) -> Dict[str, float]:
     """
     Optimize damping/armature/frictionloss for a single joint.
-    
-    Uses gradient descent with finite differences.
+
+    Uses Nelder-Mead (gradient-free simplex) with soft bounds enforced
+    via a quadratic penalty to keep parameters physically plausible.
     """
-    # Subsample for speed
+    timestamps = joint_data.timestamps[::subsample]
     cmd = joint_data.cmd_positions[::subsample]
     real = joint_data.actual_positions[::subsample]
-    
+
     # Log-scale params for positivity
-    params = np.array([
+    x0 = np.array([
         np.log(max(initial_params['damping'], 1e-6)),
         np.log(max(initial_params['armature'], 1e-6)),
         np.log(max(initial_params['frictionloss'], 1e-6)),
-    ], dtype=np.float32)
-    
-    best_loss = float('inf')
-    best_params = params.copy()
-    
-    eps = 1e-4
-    momentum = np.zeros_like(params)
-    beta = 0.9
-    
-    for it in range(n_iterations):
-        # Current params
-        damping, armature, friction = np.exp(params)
-        
-        # Simulate
+    ], dtype=np.float64)
+    x0 = np.clip(x0, BOUNDS_LOG[:, 0], BOUNDS_LOG[:, 1])
+
+    eval_count = [0]
+
+    def objective(log_params):
+        # Soft bounds: heavy penalty outside physical range
+        penalty = 0.0
+        for i in range(3):
+            if log_params[i] < BOUNDS_LOG[i, 0]:
+                penalty += 1e3 * (BOUNDS_LOG[i, 0] - log_params[i]) ** 2
+            elif log_params[i] > BOUNDS_LOG[i, 1]:
+                penalty += 1e3 * (log_params[i] - BOUNDS_LOG[i, 1]) ** 2
+
+        damping, armature, friction = np.exp(np.clip(
+            log_params, BOUNDS_LOG[:, 0], BOUNDS_LOG[:, 1]
+        ))
         sim_pos, _ = simulate_joint_with_params(
             mj_model, dof_idx, cmd,
             joint_data.kp, joint_data.kd,
             damping, armature, friction,
-            initial_pos=real[0]
+            initial_pos=real[0], timestamps=timestamps
         )
-        
-        # Loss
-        loss = np.mean((sim_pos - real) ** 2)
-        
-        if loss < best_loss:
-            best_loss = loss
-            best_params = params.copy()
-        
-        # Gradients via finite differences
-        grads = np.zeros(3)
-        for i in range(3):
-            p_plus = params.copy()
-            p_plus[i] += eps
-            
-            sim_plus, _ = simulate_joint_with_params(
-                mj_model, dof_idx, cmd,
-                joint_data.kp, joint_data.kd,
-                np.exp(p_plus[0]), np.exp(p_plus[1]), np.exp(p_plus[2]),
-                initial_pos=real[0]
-            )
-            loss_plus = np.mean((sim_plus - real) ** 2)
-            grads[i] = (loss_plus - loss) / eps
-        
-        # Update with momentum
-        momentum = beta * momentum + (1 - beta) * grads
-        params = params - learning_rate * momentum
-        params = np.clip(params, -10, 5)
-        
-        if it % 100 == 0:
-            print(f"    Iter {it}: loss={loss:.6f}, d={damping:.4f}, a={armature:.6f}, f={friction:.4f}")
-    
+        loss = float(np.mean((sim_pos - real) ** 2))
+        eval_count[0] += 1
+        if eval_count[0] % 10 == 0:
+            print(f"    eval {eval_count[0]}: loss={loss:.8f}, "
+                  f"d={damping:.4f}, a={armature:.6f}, f={friction:.4f}")
+        return loss + penalty
+
+    print(f"    Initial loss: {objective(x0):.8f}")
+    print(f"    Bounds: damping=[0.1, 10.0], armature=[0.001, 1.0], frictionloss=[0.001, 2.0]")
+
+    result = minimize(
+        objective, x0,
+        method='Nelder-Mead',
+        options={
+            'maxfev': maxfev,
+            'xatol': 1e-3,   # convergence tolerance in log-space
+            'fatol': 1e-9,    # convergence tolerance in loss
+            'adaptive': True, # scale simplex to parameter dimensionality
+        },
+    )
+
+    best = np.exp(np.clip(result.x, BOUNDS_LOG[:, 0], BOUNDS_LOG[:, 1]))
+    print(f"    Converged: {result.success}, evals: {result.nfev}, "
+          f"final loss: {result.fun:.8f}")
+
     return {
-        'damping': float(np.exp(best_params[0])),
-        'armature': float(np.exp(best_params[1])),
-        'frictionloss': float(np.exp(best_params[2])),
-        'final_loss': float(best_loss),
+        'damping': float(best[0]),
+        'armature': float(best[1]),
+        'frictionloss': float(best[2]),
+        'final_loss': float(result.fun),
     }
 
 
@@ -121,10 +130,13 @@ def save_results(results: Dict[int, Dict], sim_params_path: str, output_path: st
     # Ensure structure exists
     sim_params.setdefault('mujoco', {}).setdefault('joint', {})
     
-    # Build per-joint dicts
-    sim_params['mujoco']['joint']['damping'] = {j: round(r['damping'], 6) for j, r in results.items()}
-    sim_params['mujoco']['joint']['armature'] = {j: round(r['armature'], 6) for j, r in results.items()}
-    sim_params['mujoco']['joint']['frictionloss'] = {j: round(r['frictionloss'], 6) for j, r in results.items()}
+    # Merge per-joint dicts (preserve existing entries for joints not optimized)
+    for key in ('damping', 'armature', 'frictionloss'):
+        existing = sim_params['mujoco']['joint'].get(key, {})
+        if not isinstance(existing, dict):
+            existing = {}
+        existing.update({j: round(r[key], 6) for j, r in results.items()})
+        sim_params['mujoco']['joint'][key] = existing
     sim_params['mujoco']['joint']['_optimization_info'] = {
         'timestamp': datetime.now().isoformat(),
         'joints_optimized': list(results.keys()),
@@ -171,8 +183,9 @@ def main():
     parser.add_argument('--mujoco-xml', default='resources/T1/T1_locomotion.xml')
     parser.add_argument('--sim-params', default='tests/sim2real/config/sim_params.yaml')
     parser.add_argument('--output', default=None, help='Output sim_params path')
-    parser.add_argument('--iterations', type=int, default=500)
-    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--joint', type=int, default=None, help='Optimize a single joint index (e.g. 15)')
+    parser.add_argument('--maxfev', type=int, default=200, help='Max function evaluations per joint')
+    parser.add_argument('--subsample', type=int, default=5, help='Subsample factor for data (default 5)')
     args = parser.parse_args()
     
     exp_dir = Path('tests/sim2real/data') / args.experiment
@@ -187,7 +200,7 @@ def main():
     print(f"Joint Dynamics Optimization")
     print(f"{'='*60}")
     print(f"Experiment: {args.experiment}")
-    print(f"Iterations: {args.iterations}, LR: {args.lr}")
+    print(f"Max evals: {args.maxfev}, Subsample: {args.subsample}")
     
     # Load configs
     with open(args.robot_config) as f:
@@ -222,6 +235,8 @@ def main():
     start = time.time()
     
     for jidx, jdata in sorted(joint_data.items()):
+        if args.joint is not None and jidx != args.joint:
+            continue
         if jidx not in joint_to_dof:
             print(f"\nSkipping joint {jidx}: not in MuJoCo model")
             continue
@@ -232,7 +247,7 @@ def main():
         
         results[jidx] = optimize_single_joint(
             mj_model, jdata, joint_to_dof[jidx],
-            initial, args.iterations, args.lr
+            initial, subsample=args.subsample, maxfev=args.maxfev
         )
         
         r = results[jidx]

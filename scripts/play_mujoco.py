@@ -6,6 +6,8 @@ import torch
 import mujoco, mujoco.viewer
 from utils.config_loader import find_experiment_config, load_config
 from utils.policy_loader import load_policy
+# sim2real utilities for applying calibrated joint dynamics
+from tests.sim2real.utils.mujoco_utils import get_joint_dof_indices, apply_sim_params
 
 # === CONFIGURABLE PARAMETERS ===
 CAM_OFFSET = [-2.0, -2.0, -0.5]  # [x, y, z] camera offset for chase mode
@@ -37,6 +39,8 @@ if __name__ == "__main__":
     parser.add_argument("--task", type=str, default=None, help="Task config name (fallback if auto-detect fails)")
     parser.add_argument("--policy", required=True, type=str, help="Path to policy (.pth or .pt)")
     parser.add_argument("--config", type=str, default=None, help="Explicit config path (auto-detected if not provided)")
+    parser.add_argument("--sim-params", type=str, nargs='?', const="tests/sim2real/config/sim_params.yaml", default=None,
+                        help="Apply calibrated sim params. Optionally provide a custom path (default: tests/sim2real/config/sim_params.yaml)")
     args = parser.parse_args()
 
     # Config resolution: explicit --config > auto-detect from policy > fallback to --task
@@ -63,6 +67,18 @@ if __name__ == "__main__":
     mj_model = mujoco.MjModel.from_xml_path(cfg["asset"]["mujoco_file"])
     # mj_model = mujoco.MjModel.from_xml_path("resources/T1/T1_locomotion_arena.xml")
     mj_model.opt.timestep = cfg["sim"]["dt"]
+
+    # Apply calibrated joint dynamics (damping, armature, frictionloss)
+    if args.sim_params:
+        if os.path.exists(args.sim_params):
+            with open(args.sim_params) as f:
+                sim_params = yaml.safe_load(f)
+            joint_mapping = get_joint_dof_indices(mj_model)
+            apply_sim_params(mj_model, sim_params, joint_mapping)
+            print(f"Applied calibrated sim params from: {args.sim_params}")
+        else:
+            print(f"Warning: sim params file not found: {args.sim_params} (using XML defaults)")
+
     mj_data = mujoco.MjData(mj_model)
     mujoco.mj_resetData(mj_model, mj_data)
     
