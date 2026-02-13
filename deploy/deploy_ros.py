@@ -24,14 +24,6 @@ from utils.timer import TimerConfig, Timer
 from utils.policy import Policy
 from utils.data_logger import DataLogger
 
-ENABLE_ROS2_LOGGING = False
-
-if ENABLE_ROS2_LOGGING:
-    import rclpy
-    from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-    from std_msgs.msg import Float32MultiArray
-    from booster_msgs.msg import BoosterControlCmd, BoosterMotorCmd
-
 
 class Controller:
     def __init__(self, cfg_file, task_name="experiment") -> None:
@@ -60,9 +52,6 @@ class Controller:
         self.data_logger = DataLogger(output_dir, num_joints=B1JointCnt, policy_name=policy_name)
         self.logger.info(f"Policy: {policy_name}")
         self.logger.info(f"Data logger output: {output_dir}")
-
-        if ENABLE_ROS2_LOGGING:
-            self._init_ros2_logging()
 
     def _init_timer(self):
         self.timer = Timer(TimerConfig(time_step=self.cfg["common"]["dt"]))
@@ -100,28 +89,6 @@ class Controller:
             self.logger.error(f"Failed to initialize communication: {e}")
             raise
 
-    def _init_ros2_logging(self):
-        rclpy.init()
-        self.ros_node = rclpy.create_node('deploy_logger')
-
-        qos = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            durability=DurabilityPolicy.VOLATILE,
-            depth=1
-        )
-
-        self.pub_control_cmd = self.ros_node.create_publisher(BoosterControlCmd, '/booster/control_cmd', qos)
-        self.pub_motor_cmd = self.ros_node.create_publisher(BoosterMotorCmd, '/booster/motor_cmd', qos)
-        self.pub_policy_obs = self.ros_node.create_publisher(Float32MultiArray, '/booster/policy_obs', qos)
-        self.pub_policy_actions = self.ros_node.create_publisher(Float32MultiArray, '/booster/policy_actions', qos)
-
-        self.ctrl_msg = BoosterControlCmd()
-        self.obs_msg = Float32MultiArray()
-        self.act_msg = Float32MultiArray()
-        self.motor_msg = BoosterMotorCmd()
-
-        self.logger.info("ROS2 logging initialized")
-
     def _low_state_handler(self, low_state_msg: LowState):
         if abs(low_state_msg.imu_state.rpy[0]) > 1.0 or abs(low_state_msg.imu_state.rpy[1]) > 1.0:
             self.logger.warning("IMU base rpy values are too large: {}".format(low_state_msg.imu_state.rpy))
@@ -156,10 +123,6 @@ class Controller:
     def cleanup(self) -> None:
         self.data_logger.save()
         self.remoteControlService.close()
-        if ENABLE_ROS2_LOGGING:
-            if rclpy.ok():
-                self.ros_node.destroy_node()
-                rclpy.shutdown()
         if hasattr(self, "low_cmd_publisher"):
             self.low_cmd_publisher.CloseChannel()
         if hasattr(self, "low_state_subscriber"):
@@ -239,22 +202,6 @@ class Controller:
             actions=self.policy.actions,
         )
 
-        if ENABLE_ROS2_LOGGING:
-            vx = self.remoteControlService.get_vx_cmd()
-            vy = self.remoteControlService.get_vy_cmd()
-            vyaw = self.remoteControlService.get_vyaw_cmd()
-
-            self.ctrl_msg.vx = vx
-            self.ctrl_msg.vy = vy
-            self.ctrl_msg.vyaw = vyaw
-            self.pub_control_cmd.publish(self.ctrl_msg)
-
-            self.obs_msg.data = self.policy.obs.tolist()
-            self.pub_policy_obs.publish(self.obs_msg)
-
-            self.act_msg.data = self.policy.actions.tolist()
-            self.pub_policy_actions.publish(self.act_msg)
-
         time.sleep(0.001)
 
     def _publish_cmd(self):
@@ -280,14 +227,6 @@ class Controller:
                     self.cfg["common"]["torque_limit"][i],
                 )
                 motor_cmd[i].kp = 0.0
-
-            if ENABLE_ROS2_LOGGING:
-                self.motor_msg.joint_positions = self.filtered_dof_target.tolist()
-                self.motor_msg.joint_velocities = [motor_cmd[i].dq for i in range(B1JointCnt)]
-                self.motor_msg.joint_torques = [motor_cmd[i].tau for i in range(B1JointCnt)]
-                self.motor_msg.joint_kp = [motor_cmd[i].kp for i in range(B1JointCnt)]
-                self.motor_msg.joint_kd = [motor_cmd[i].kd for i in range(B1JointCnt)]
-                self.pub_motor_cmd.publish(self.motor_msg)
 
             start_time = time.perf_counter()
             self._send_cmd(self.low_cmd)
