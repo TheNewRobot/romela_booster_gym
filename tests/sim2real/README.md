@@ -172,8 +172,7 @@ tests/sim2real/
 │   ├── sysid_joint_dynamics.py    # Data collection (on robot)
 │   ├── plot_joint_response.py     # Visualize real data
 │   ├── optimize_joint_dynamics.py # Parameter optimization (Nelder-Mead)
-│   ├── compare_sim_real.py        # Validation (named runs)
-│   └── plot_deployment.py         # Deployment diagnostics
+│   └── compare_sim_real.py        # Validation (named runs)
 └── utils/
     ├── joint_data_utils.py        # CSV loading, JointData container
     ├── mujoco_utils.py            # MuJoCo simulation (time-aware stepping)

@@ -162,7 +162,9 @@ deploy/data/T1/
 ## Analyze Deployment
 
 ```bash
-python tests/sim2real/scripts/plot_deployment.py --data deploy/data/T1/deploy_log_obs_2026-02-08_04-59-30
+cd deploy
+python plot_deployment.py --data data/deploy_log_obs_2026-02-08_05-18-58
+python plot_deployment.py --data data/deploy_log_obs_2026-02-08_05-18-58 --show
 ```
 
 Options:
