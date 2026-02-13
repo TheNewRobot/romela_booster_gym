@@ -184,3 +184,75 @@ Outputs (saved to experiment folder):
 | Right | 17–22 | Hip_Pitch, Hip_Roll, Hip_Yaw, Knee_Pitch, Ankle_Pitch, Ankle_Roll |
 
 Parallel mechanism ankles: joints 15, 16, 21, 22 (torque control, bypass PD).
+
+## Vicon Motion Capture Recording
+
+Record base pose from Vicon alongside deployment data for sim-vs-real walking replay. The Vicon recorder is a **completely separate script** — it does not touch `deploy_ros.py` or any control logic.
+
+### One-time setup
+
+The Vicon bridge uses the `ROS2_mocap` workspace at the repo root.
+
+```bash
+# 1. Install Vicon DataStream SDK (see ROS2_mocap/install_DataStreamSDK_10.1/)
+
+# 2. Build the ROS2 workspace
+source /opt/ros/humble/setup.bash
+cd ROS2_mocap/ros2
+colcon build
+```
+
+### Recording with Vicon
+
+You need 3 terminals. Connect to WiFi: `romela_apollo_5g` (password: `RoMeLa_Lab_UCLA`).
+
+```bash
+# Terminal 1: Vicon bridge (publishes pose to ROS2 topics)
+source /opt/ros/humble/setup.bash
+cd ROS2_mocap/ros2 && source install/setup.bash
+ros2 launch vicon_receiver client.launch.py
+
+# Terminal 2: Vicon CSV recorder (start before deployment, stop after with Ctrl+C)
+source /opt/ros/humble/setup.bash
+cd ROS2_mocap/ros2 && source install/setup.bash
+cd deploy
+python record_vicon.py
+
+# Terminal 3: Deployment (unchanged, no ROS2 needed)
+conda activate romela_gym
+cd deploy
+python deploy_ros.py --config=T1.yaml --net=192.168.10.102 --profile walk_forward
+```
+
+The Vicon recorder auto-creates a timestamped folder `deploy/data/vicon_<timestamp>/`. After the experiment, move `vicon_log.csv` into the matching deployment folder:
+```bash
+mv data/vicon_2026-02-15_10-30-00/vicon_log.csv data/deploy_log_obs_2026-02-15_10-30-05/
+```
+
+To verify Vicon topics are working (before recording):
+```bash
+ros2 topic list                           # should show vicon/booster1/booster1
+ros2 topic echo vicon/booster1/booster1   # should show live pose data
+```
+
+If your Vicon subject has a different name, use `--topic`:
+```bash
+python record_vicon.py --topic vicon/my_robot/my_robot
+```
+
+### Testing without the robot
+
+You can verify the Vicon recording works without the T1 — just track any object in Vicon Tracker and run Terminals 1 and 2. Check the output CSV has position data that matches the object's movement.
+
+### Output
+
+After moving `vicon_log.csv` into the deployment folder:
+```
+deploy/data/deploy_log_obs_2026-02-15_10-30-00/
+    deployment_log.csv   # joints, IMU, commands (from deploy_ros.py)
+    vicon_log.csv        # base pose at ~200Hz (from record_vicon.py)
+```
+
+`vicon_log.csv` columns: `wall_time, base_x, base_y, base_z, base_qx, base_qy, base_qz, base_qw`
+
+Position is in meters (raw Vicon frame, no coordinate transforms). Synchronization with `deployment_log.csv` is done in post-processing by cross-correlating IMU orientation with Vicon orientation.
