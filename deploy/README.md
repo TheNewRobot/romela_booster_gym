@@ -135,8 +135,6 @@ Key parameters:
 
 `deploy_ros.py` streams a single CSV at ~50Hz to `deploy/data/<config>/<experiment>/deployment_log.csv`. Data is flushed to disk continuously — survives Ctrl+C or terminal kill with no data loss.
 
-ROS2 logging is off by default. Set `ENABLE_ROS2_LOGGING = True` in `deploy_ros.py` to re-enable (requires ROS2 workspace sourced).
-
 **CSV columns (117 per row):**
 
 | Group | Columns | Count |
