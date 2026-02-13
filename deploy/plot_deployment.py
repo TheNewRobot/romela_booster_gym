@@ -4,9 +4,6 @@ Deployment diagnostic dashboard.
 Reads deployment_log.csv from deploy/data/<task>/<experiment>/ and generates
 analysis plots + stats.txt in the same folder.
 
-Usage (from repo root):
-    python deploy/plot_deployment.py --data deploy/data/T1/deploy_log_obs_2026-02-08_03-58-08
-    python deploy/plot_deployment.py --data deploy/data/T1/deploy_log_obs_2026-02-08_03-58-08 --show
 """
 
 import argparse
