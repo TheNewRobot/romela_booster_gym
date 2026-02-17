@@ -240,6 +240,27 @@ If your Vicon subject has a different name, use `--topic`:
 python record_vicon.py --topic vicon/my_robot/my_robot
 ```
 
+### Mocap Offset Calibration
+
+The Vicon tracks the L-bracket marker cluster, not the robot's Trunk frame directly. The fixed offset between them is defined in `deploy/configs/mocap_offset.yaml`:
+
+```yaml
+dx: -0.07   # meters, backward from trunk
+dy:  0.0    # meters, lateral
+dz:  0.51   # meters, upward from trunk
+pitch: 0.0  # degrees, pitch angle of the bracket
+```
+
+To tune this offset visually:
+
+```bash
+python deploy/utils/visualize_mocap_frame.py
+python deploy/utils/visualize_mocap_frame.py --pitch 5.0
+python deploy/utils/visualize_mocap_frame.py --dx -0.07 --dz 0.51 --pitch 3.0
+```
+
+This spawns the robot in MuJoCo with an RGB frame (Red=X forward, Green=Y left, Blue=Z up) at the configured offset. Adjust the yaml values until the frame matches where the Vicon markers sit on the real robot. The same config is used by sim2real replay scripts to transform Vicon pose into Trunk pose.
+
 ### Testing without the robot
 
 You can verify the Vicon recording works without the T1 — just track any object in Vicon Tracker and run Terminals 1 and 2. Check the output CSV has position data that matches the object's movement.

@@ -1,0 +1,9 @@
+# Vicon L-bracket offset from Trunk frame
+# Tune these values using: python deploy/utils/visualize_mocap_frame.py
+# Used by the mocap visualizer and sim2real replay scripts to transform
+# Vicon marker pose -> Trunk (base) pose.
+
+dx: -0.07   # meters, backward from trunk
+dy:  0.0     # meters, lateral
+dz:  0.51    # meters, upward from trunk
+pitch: 10.0   # degrees, pitch angle of the bracket
