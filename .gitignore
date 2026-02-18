@@ -4,6 +4,7 @@
 /videos
 /logs
 /exps
+/context
 deploy/models/
 deploy/data
 tests/sim2real/data/
