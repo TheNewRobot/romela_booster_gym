@@ -1,6 +1,6 @@
-# Sim2Real Joint Dynamics Calibration
+# Sim2Real Calibration
 
-Tune MuJoCo simulation parameters (damping, armature, frictionloss) to match real robot joint dynamics using data from hanging robot tests.
+Tools for calibrating MuJoCo joint dynamics.
 
 ## Overview
 
@@ -151,6 +151,18 @@ tests/sim2real/data/hanging_test_00/
 - **PD control masking:** Strong PD gains (kp=200 for hips) make some dynamics parameters hard to observe from position data alone. The optimizer finds the best fit within what position tracking can reveal.
 - **Ankle limitations:** The parallel mechanism (joints 15-16, 21-22) adds dynamics that 3 scalar parameters can't fully capture. Expect weaker fits for ankle joints.
 
+## Deployment Mocap
+
+Plot Vicon base trajectory alongside velocity commands from a deployment experiment. Timestamps are aligned automatically via cross-correlation between commanded velocity and Vicon-measured speed.
+
+```bash
+python tests/sim2real/scripts/plot_deployment_mocap.py --deploy deploy/data/<experiment>
+```
+
+The `--deploy` folder should contain `deployment_log.csv` and a `vicon_*/vicon_log.csv` subdirectory (auto-detected).
+
+Output: `<deploy>/plots/deployment_mocap.png` — XY path (body frame) on the left, height change, distance from start, and velocity commands stacked on the right with a shared time axis.
+
 ## File Structure
 
 ```
@@ -172,14 +184,19 @@ tests/sim2real/
 │   ├── sysid_joint_dynamics.py    # Data collection (on robot)
 │   ├── plot_joint_response.py     # Visualize real data
 │   ├── optimize_joint_dynamics.py # Parameter optimization (Nelder-Mead)
-│   └── compare_sim_real.py        # Validation (named runs)
+│   ├── compare_sim_real.py        # Validation (named runs)
+│   └── plot_deployment_mocap.py   # Deployment + Vicon visualization
 └── utils/
     ├── joint_data_utils.py        # CSV loading, JointData container
-    ├── mujoco_utils.py            # MuJoCo simulation (time-aware stepping)
+    ├── mujoco_utils.py            # MuJoCo simulation, PD gains, metrics
+    ├── deployment_utils.py        # Deployment/Vicon data loading + alignment
+    ├── deployment_plots.py        # Base trajectory + command plots
     └── data_utils.py              # General data utilities
 ```
 
 ## Joint Reference
+
+Joint mapping is defined in `envs/locomotion/T1.yaml` under the `joints` section.
 
 | Index | Left Leg | Index | Right Leg |
 |-------|----------|-------|-----------|

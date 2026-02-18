@@ -10,7 +10,7 @@ Provides functions to:
 
 import numpy as np
 import mujoco
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 
 
@@ -22,6 +22,58 @@ LEG_JOINT_NAMES = {
     17: "Right_Hip_Pitch", 18: "Right_Hip_Roll", 19: "Right_Hip_Yaw",
     20: "Right_Knee_Pitch", 21: "Right_Ankle_Pitch", 22: "Right_Ankle_Roll",
 }
+
+
+def build_pd_gains(
+    mj_model: mujoco.MjModel,
+    cfg: dict,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Build per-actuator stiffness, damping, and default_dof_pos arrays from config.
+
+    Iterates MuJoCo actuator names, matches against config keys (Hip, Knee, Ankle)
+    for PD gains and default joint angle keys (Hip_Pitch, Knee_Pitch, etc.).
+
+    Args:
+        mj_model: MuJoCo model
+        cfg: Task config dict (T1.yaml) with control.stiffness, control.damping,
+             and init_state.default_joint_angles sections.
+
+    Returns:
+        (stiffness, damping, default_dof_pos) — each shape (num_actuators,)
+    """
+    num_actuators = mj_model.nu
+    default_dof_pos = np.zeros(num_actuators, dtype=np.float32)
+    stiffness = np.zeros(num_actuators, dtype=np.float32)
+    damping = np.zeros(num_actuators, dtype=np.float32)
+
+    for i in range(num_actuators):
+        actuator_name = mujoco.mj_id2name(
+            mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, i
+        )
+
+        # Default joint angles
+        found = False
+        for name in cfg["init_state"]["default_joint_angles"].keys():
+            if name in actuator_name:
+                default_dof_pos[i] = cfg["init_state"]["default_joint_angles"][name]
+                found = True
+                break
+        if not found:
+            default_dof_pos[i] = cfg["init_state"]["default_joint_angles"]["default"]
+
+        # PD gains
+        found = False
+        for name in cfg["control"]["stiffness"].keys():
+            if name in actuator_name:
+                stiffness[i] = cfg["control"]["stiffness"][name]
+                damping[i] = cfg["control"]["damping"][name]
+                found = True
+                break
+        if not found:
+            raise ValueError(f"PD gain of joint {actuator_name} were not defined")
+
+    return stiffness, damping, default_dof_pos
 
 
 def load_mujoco_model(xml_path: str) -> mujoco.MjModel:
