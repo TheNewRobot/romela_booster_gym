@@ -1,0 +1,56 @@
+# AMP Booster T1 configuration
+
+dataset:
+  base_url: "https://huggingface.co/datasets/SaiResearch/booster_dataset/resolve/main/soccer/booster_t1"
+  files:
+    - goal_kick.npz
+    - jogging.npz
+    - kick_ball1.npz
+    - kick_ball2.npz
+    - kick_ball3.npz
+    - pass_ball1.npz
+    - powerful_kick.npz
+    - running.npz
+    - soccer_drill_run.npz
+    - walking1.npz
+    - walking2.npz
+
+# Map dataset joint names → MuJoCo XML joint names
+joint_name_map:
+  Left_Hip_Pitch: Left_Hip_Pitch
+  Left_Hip_Roll: Left_Hip_Roll
+  Left_Hip_Yaw: Left_Hip_Yaw
+  Left_Knee_Pitch: Left_Knee_Pitch
+  Left_Ankle_Pitch: Left_Ankle_Pitch
+  Left_Ankle_Roll: Left_Ankle_Roll
+  Right_Hip_Pitch: Right_Hip_Pitch
+  Right_Hip_Roll: Right_Hip_Roll
+  Right_Hip_Yaw: Right_Hip_Yaw
+  Right_Knee_Pitch: Right_Knee_Pitch
+  Right_Ankle_Pitch: Right_Ankle_Pitch
+  Right_Ankle_Roll: Right_Ankle_Roll
+  # Lowercase alternatives
+  left_hip_pitch: Left_Hip_Pitch
+  left_hip_roll: Left_Hip_Roll
+  left_hip_yaw: Left_Hip_Yaw
+  left_knee_pitch: Left_Knee_Pitch
+  left_ankle_pitch: Left_Ankle_Pitch
+  left_ankle_roll: Left_Ankle_Roll
+  right_hip_pitch: Right_Hip_Pitch
+  right_hip_roll: Right_Hip_Roll
+  right_hip_yaw: Right_Hip_Yaw
+  right_knee_pitch: Right_Knee_Pitch
+  right_ankle_pitch: Right_Ankle_Pitch
+  right_ankle_roll: Right_Ankle_Roll
+
+# Joint names in the NPZ that represent the free/root joint (filtered out for mapping)
+free_joint_names:
+  - root
+  - Root
+  - free
+  - freejoint
+
+camera:
+  distance: 3.0
+  azimuth: 45.0      # front-right isometric
+  elevation: -20.0

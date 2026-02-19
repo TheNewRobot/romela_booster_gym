@@ -8,6 +8,7 @@
 deploy/models/
 deploy/data
 tests/sim2real/data/
+tests/integration/amp/*/data/raw/
 
 __pycache__/
 
