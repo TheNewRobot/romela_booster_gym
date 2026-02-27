@@ -15,3 +15,6 @@ __pycache__/
 MUJOCO_LOG.TXT
 .claudeignore
 CLAUDE.md
+
+# AWS (never commit credentials or sweep state)
+aws/
