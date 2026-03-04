@@ -7,7 +7,7 @@ Tools for calibrating MuJoCo joint dynamics.
 The pipeline has three stages:
 
 1. **Data Collection** — Record joint responses on real robot (hanging, no ground contact)
-2. **Optimization** — Find simulation parameters that minimize position error vs real data (Nelder-Mead, gradient-free)
+2. **Optimization** — Find simulation parameters that minimize position + velocity error vs real data (Nelder-Mead, gradient-free)
 3. **Comparison** — Validate tuned simulation against real trajectories, saved as named runs for A/B comparison
 
 ## Quick Start
@@ -102,6 +102,9 @@ python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_te
 
 # Custom settings
 python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00 --maxfev 400 --subsample 3
+
+# Override velocity weight from CLI (0 = position-only, original behavior)
+python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_test_00 --velocity-weight 0.02
 ```
 
 **Parameters optimized (per-joint):**
@@ -110,6 +113,8 @@ python tests/sim2real/scripts/optimize_joint_dynamics.py --experiment hanging_te
 | `damping` | Passive viscous joint damping | [0.1, 10.0] |
 | `armature` | Reflected rotor inertia | [0.001, 1.0] |
 | `frictionloss` | Dry (Coulomb) friction | [0.001, 2.0] |
+
+**Velocity matching:** The objective includes both position and velocity MSE: `loss = pos_mse + velocity_weight * vel_mse`. The weight is configured in `sim_params.yaml` under `optimization.velocity_weight` (default: 0.01) or overridden via `--velocity-weight`. Velocity matching gives the optimizer direct signal on damping (force = -damping × velocity) rather than inferring it indirectly from position trajectories. Set to 0 for position-only (original behavior).
 
 **Output:** `tests/sim2real/config/sim_params.yaml` (merged — running `--joint` only updates that joint's entries)
 
@@ -148,7 +153,7 @@ tests/sim2real/data/hanging_test_00/
 ## Technical Notes
 
 - **Simulation timing:** The simulation respects real-world timestamps from the data — it runs the correct number of MuJoCo sub-steps between data points to match elapsed real time. This is critical for accurate comparison when subsampling.
-- **PD control masking:** Strong PD gains (kp=200 for hips) make some dynamics parameters hard to observe from position data alone. The optimizer finds the best fit within what position tracking can reveal.
+- **PD control masking:** Strong PD gains (kp=200 for hips) make some dynamics parameters hard to observe from position data alone. Velocity matching (`velocity_weight > 0`) helps by giving the optimizer direct signal on damping — since damping force is proportional to velocity, velocity errors are more sensitive to damping than position errors are.
 - **Ankle limitations:** The parallel mechanism (joints 15-16, 21-22) adds dynamics that 3 scalar parameters can't fully capture. Expect weaker fits for ankle joints.
 
 ## Deployment Mocap

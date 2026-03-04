@@ -50,16 +50,25 @@ def optimize_single_joint(
     initial_params: Dict[str, float],
     subsample: int = 5,
     maxfev: int = 200,
+    velocity_weight: float = 0.0,
 ) -> Dict[str, float]:
     """
     Optimize damping/armature/frictionloss for a single joint.
 
     Uses Nelder-Mead (gradient-free simplex) with soft bounds enforced
     via a quadratic penalty to keep parameters physically plausible.
+
+    Args:
+        velocity_weight: Weight for velocity MSE in the objective.
+            0.0 = position-only (original behavior).
+            Recommended starting value: 0.01.
     """
     timestamps = joint_data.timestamps[::subsample]
     cmd = joint_data.cmd_positions[::subsample]
-    real = joint_data.actual_positions[::subsample]
+    real_pos = joint_data.actual_positions[::subsample]
+    real_vel = joint_data.actual_velocities[::subsample]
+
+    use_velocity = velocity_weight > 0.0
 
     # Log-scale params for positivity
     x0 = np.array([
@@ -83,21 +92,31 @@ def optimize_single_joint(
         damping, armature, friction = np.exp(np.clip(
             log_params, BOUNDS_LOG[:, 0], BOUNDS_LOG[:, 1]
         ))
-        sim_pos, _ = simulate_joint_with_params(
+        sim_pos, sim_vel = simulate_joint_with_params(
             mj_model, dof_idx, cmd,
             joint_data.kp, joint_data.kd,
             damping, armature, friction,
-            initial_pos=real[0], timestamps=timestamps
+            initial_pos=real_pos[0], timestamps=timestamps
         )
-        loss = float(np.mean((sim_pos - real) ** 2))
+        pos_loss = float(np.mean((sim_pos - real_pos) ** 2))
+        if use_velocity:
+            vel_loss = float(np.mean((sim_vel - real_vel) ** 2))
+            loss = pos_loss + velocity_weight * vel_loss
+        else:
+            loss = pos_loss
         eval_count[0] += 1
         if eval_count[0] % 10 == 0:
-            print(f"    eval {eval_count[0]}: loss={loss:.8f}, "
-                  f"d={damping:.4f}, a={armature:.6f}, f={friction:.4f}")
+            msg = f"    eval {eval_count[0]}: loss={loss:.8f}"
+            if use_velocity:
+                msg += f" (pos={pos_loss:.8f}, vel={vel_loss:.4f})"
+            msg += f", d={damping:.4f}, a={armature:.6f}, f={friction:.4f}"
+            print(msg)
         return loss + penalty
 
     print(f"    Initial loss: {objective(x0):.8f}")
     print(f"    Bounds: damping=[0.1, 10.0], armature=[0.001, 1.0], frictionloss=[0.001, 2.0]")
+    if use_velocity:
+        print(f"    Velocity weight: {velocity_weight}")
 
     result = minimize(
         objective, x0,
@@ -186,6 +205,8 @@ def main():
     parser.add_argument('--joint', type=int, default=None, help='Optimize a single joint index (e.g. 15)')
     parser.add_argument('--maxfev', type=int, default=200, help='Max function evaluations per joint')
     parser.add_argument('--subsample', type=int, default=5, help='Subsample factor for data (default 5)')
+    parser.add_argument('--velocity-weight', type=float, default=None,
+                        help='Weight for velocity MSE in objective (overrides config, 0=position-only)')
     args = parser.parse_args()
     
     exp_dir = Path('tests/sim2real/data') / args.experiment
@@ -196,18 +217,28 @@ def main():
             print(f"Error: {p} not found")
             return
     
+    # Resolve velocity weight: CLI > config > default (0.0 = position-only)
+    with open(args.sim_params) as f:
+        sim_params_cfg = yaml.safe_load(f)
+    velocity_weight = args.velocity_weight
+    if velocity_weight is None:
+        velocity_weight = sim_params_cfg.get('optimization', {}).get('velocity_weight', 0.0)
+
     print(f"\n{'='*60}")
     print(f"Joint Dynamics Optimization")
     print(f"{'='*60}")
     print(f"Experiment: {args.experiment}")
     print(f"Max evals: {args.maxfev}, Subsample: {args.subsample}")
+    if velocity_weight > 0:
+        print(f"Velocity weight: {velocity_weight} (position + velocity matching)")
+    else:
+        print(f"Velocity weight: 0.0 (position-only matching)")
     
     # Load configs
     with open(args.robot_config) as f:
         robot_cfg = yaml.safe_load(f)
-    with open(args.sim_params) as f:
-        sim_params = yaml.safe_load(f)
-    
+    sim_params = sim_params_cfg  # already loaded above
+
     # Load model and data
     print(f"\nLoading MuJoCo model...")
     mj_model = load_mujoco_model(args.mujoco_xml)
@@ -247,7 +278,8 @@ def main():
         
         results[jidx] = optimize_single_joint(
             mj_model, jdata, joint_to_dof[jidx],
-            initial, subsample=args.subsample, maxfev=args.maxfev
+            initial, subsample=args.subsample, maxfev=args.maxfev,
+            velocity_weight=velocity_weight,
         )
         
         r = results[jidx]
