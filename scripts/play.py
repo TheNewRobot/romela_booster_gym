@@ -9,7 +9,7 @@ import torch
 from envs import *
 from policies.actor_critic import ActorCritic
 from utils.isaac_gym_utils import get_friction, set_friction, print_friction, print_play_status
-from utils.config_loader import load_config
+from utils.config_loader import load_config, find_experiment_config
 
 # === CONFIGURABLE PARAMETERS ===
 FRICTION_OVERRIDE = None  # None=use config, float=override foot friction
@@ -23,7 +23,7 @@ NUM_LEG_JOINTS = 12
 def load_policy(policy_path, cfg, device):
     """Load policy - supports both .pth (ActorCritic) and .pt (JIT)."""
     is_jit = policy_path.endswith(".pt")
-    
+
     if is_jit:
         policy = torch.jit.load(policy_path, map_location=device)
         policy.eval()
@@ -54,6 +54,15 @@ def build_obs_47(env, actions, cfg):
     return obs
 
 
+def find_live_config(task_name):
+    """Find the live config file (envs/<task>.yaml) as fallback."""
+    for root, dirs, files in os.walk("envs"):
+        for file in files:
+            if file == f"{task_name}.yaml":
+                return os.path.join(root, file)
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", required=True, type=str, help="Task config name")
@@ -61,17 +70,19 @@ def main():
     parser.add_argument("--num_envs", type=int, default=1, help="Number of environments")
     args = parser.parse_args()
 
-    # Load config
+    # Load config: prefer experiment config saved with the policy, fall back to live config
     cfg_file = None
-    for root, dirs, files in os.walk("envs"):
-        for file in files:
-            if file == f"{args.task}.yaml":
-                cfg_file = os.path.join(root, file)
-                break
+    if args.policy:
+        cfg_file = find_experiment_config(args.policy)
+        if cfg_file:
+            print(f"Loading experiment config from: {cfg_file}")
+
     if cfg_file is None:
-        raise FileNotFoundError(f"Config file '{args.task}.yaml' not found in envs/")
-    
-    print(f"Loading config from: {cfg_file}")
+        cfg_file = find_live_config(args.task)
+        if cfg_file is None:
+            raise FileNotFoundError(f"Config file '{args.task}.yaml' not found in envs/")
+        print(f"Loading live config from: {cfg_file}")
+
     cfg = load_config(cfg_file)
     
     # Override for play mode
