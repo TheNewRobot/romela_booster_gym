@@ -29,7 +29,7 @@ import numpy as np
 # Isaac Gym imports (must be before other gym-related imports)
 import isaacgym
 from envs import *
-from policies.actor_critic import ActorCritic
+from policies.actor_critic import ActorCritic, get_network_dims
 import torch
 
 def load_yaml(path):
@@ -236,10 +236,13 @@ class PolicyArenaEvaluator:
             checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=True)
             
             # Create model with matching architecture
+            actor_dims, critic_dims = get_network_dims({}, checkpoint["model"])
             model = ActorCritic(
                 num_act=env.num_actions,
                 num_obs=env.num_obs,
-                num_privileged_obs=env.num_privileged_obs
+                num_privileged_obs=env.num_privileged_obs,
+                actor_hidden_dims=actor_dims,
+                critic_hidden_dims=critic_dims,
             ).to(self.device)
             
             # Load weights

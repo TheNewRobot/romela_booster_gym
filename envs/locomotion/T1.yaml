@@ -8,6 +8,10 @@ basic:
   description: "Config5 was successful - now trying to fix the hip roll problem"
   name: "t1_locomotion_policy_height_config5"
 
+network:
+  actor_hidden_dims: [256, 128, 128]
+  critic_hidden_dims: [256, 256, 128]
+
 env:
   num_envs: 4096
   num_observations: 47

@@ -31,7 +31,14 @@ class Runner:
 
         self.device = self.cfg["basic"]["rl_device"]
         self.learning_rate = self.cfg["algorithm"]["learning_rate"]
-        self.model = ActorCritic(self.env.num_actions, self.env.num_obs, self.env.num_privileged_obs).to(self.device)
+        assert "network" in self.cfg, \
+            "Missing 'network' section in config — must specify actor_hidden_dims and critic_hidden_dims"
+        actor_dims = self.cfg["network"]["actor_hidden_dims"]
+        critic_dims = self.cfg["network"]["critic_hidden_dims"]
+        self.model = ActorCritic(
+            self.env.num_actions, self.env.num_obs, self.env.num_privileged_obs,
+            actor_hidden_dims=actor_dims, critic_hidden_dims=critic_dims,
+        ).to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self._load()
 
@@ -100,6 +107,7 @@ class Runner:
         source_basic = self.cfg["basic"].copy()
         source_env = self.cfg["env"].copy()
         source_terrain = self.cfg["terrain"]["type"]
+        source_network = self.cfg.get("network", {}).copy()
         with open(saved_cfg_path, "r", encoding="utf-8") as f:
             self.cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
         self.cfg["viewer"] = source_viewer
@@ -107,6 +115,8 @@ class Runner:
         self.cfg["basic"]["headless"] = source_basic["headless"]
         self.cfg["env"]["num_envs"] = source_env["num_envs"]
         self.cfg["terrain"]["type"] = source_terrain
+        if "network" not in self.cfg and source_network:
+            self.cfg["network"] = source_network
         print(f"Config: {saved_cfg_path}")
 
     def _set_seed(self):

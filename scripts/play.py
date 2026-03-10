@@ -7,7 +7,7 @@ import signal
 import imageio
 import torch
 from envs import *
-from policies.actor_critic import ActorCritic
+from policies.actor_critic import ActorCritic, get_network_dims
 from utils.isaac_gym_utils import get_friction, set_friction, print_friction, print_play_status
 from utils.config_loader import load_config, find_experiment_config
 
@@ -29,8 +29,12 @@ def load_policy(policy_path, cfg, device):
         policy.eval()
         return policy, True
     else:
-        model = ActorCritic(cfg["env"]["num_actions"], cfg["env"]["num_observations"], cfg["env"]["num_privileged_obs"])
         model_dict = torch.load(policy_path, map_location="cpu", weights_only=True)
+        actor_dims, critic_dims = get_network_dims(cfg, model_dict["model"])
+        model = ActorCritic(
+            cfg["env"]["num_actions"], cfg["env"]["num_observations"], cfg["env"]["num_privileged_obs"],
+            actor_hidden_dims=actor_dims, critic_hidden_dims=critic_dims,
+        )
         model.load_state_dict(model_dict["model"])
         model = model.to(device)
         model.eval()

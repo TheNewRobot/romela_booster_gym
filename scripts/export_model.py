@@ -2,7 +2,7 @@ import os
 import yaml
 import argparse
 import torch
-from policies.actor_critic import ActorCritic
+from policies.actor_critic import ActorCritic, get_network_dims
 from utils.config_loader import find_experiment_config, load_config
 
 if __name__ == "__main__":
@@ -27,11 +27,15 @@ if __name__ == "__main__":
         else:
             raise ValueError("Could not find config. Provide --config or --task, or ensure config.yaml exists in experiment folder.")
     cfg = load_config(cfg_file)
-    model = ActorCritic(cfg["env"]["num_actions"], cfg["env"]["num_observations"], cfg["env"]["num_privileged_obs"])
     cfg["basic"]["checkpoint"] = args.checkpoint
 
     print("Loading model from {}".format(cfg["basic"]["checkpoint"]))
     model_dict = torch.load(cfg["basic"]["checkpoint"], map_location="cpu", weights_only=True)
+    actor_dims, critic_dims = get_network_dims(cfg, model_dict["model"])
+    model = ActorCritic(
+        cfg["env"]["num_actions"], cfg["env"]["num_observations"], cfg["env"]["num_privileged_obs"],
+        actor_hidden_dims=actor_dims, critic_hidden_dims=critic_dims,
+    )
     model.load_state_dict(model_dict["model"])
 
     model.eval()
